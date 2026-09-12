@@ -9,8 +9,11 @@ case_sessions/
 case_backups/
 
 # Personal skills - each install builds its own via Settings > Skills.
-# Also covers the generated semantic-matching embedding cache.
-skills/
+# Also excludes the generated semantic-matching embedding cache. A few
+# example-*.md files ARE tracked on purpose (see README) so a fresh clone
+# has something to see in Settings > Skills right away.
+skills/*
+!skills/example-*.md
 
 # Personal fallback-memory snapshot (see memory/README.md for what this is -
 # memory/README.md itself is generic and stays tracked).

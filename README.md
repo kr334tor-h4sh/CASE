@@ -30,7 +30,8 @@ rough edges, incomplete platform support, and breaking changes without notice.
   frontmatter). Three matching modes: keyword (explicit trigger phrases),
   semantic (local embedding similarity, no triggers needed), and manual
   (never auto-fires, invoked on demand). Can also import skills already on
-  disk in Claude Code's own `SKILL.md` format.
+  disk in Claude Code's own `SKILL.md` format. `skills/example-*.md` has
+  one of each mode to try out of the box.
 - `case_local_llm.py` / `case_hardware.py` — local GGUF inference via
   llama-cpp-python, with GPU-offload/context-size auto-backoff and
   best-effort hardware detection (NVIDIA, Apple Silicon, Android/Adreno).
