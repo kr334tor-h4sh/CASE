@@ -1,0 +1,34 @@
+# Personal configuration - system prompt override, model choice, endpoints.
+# CASE runs fine with none of this present (see README.md).
+case_config.json
+
+# Personal chat history
+case_sessions/
+
+# Personal automatic file-edit backups (see case_write_tools.py)
+case_backups/
+
+# Personal skills - each install builds its own via Settings > Skills.
+# Also covers the generated semantic-matching embedding cache.
+skills/
+
+# Personal fallback-memory snapshot (see memory/README.md for what this is -
+# memory/README.md itself is generic and stays tracked).
+memory/MEMORY_SNAPSHOT.md
+
+# Local model files - large binaries, never belong in git regardless of
+# whose they are. Drop your own .gguf in local_models/ (see its README).
+local_models/*.gguf
+
+# Runtime artifacts
+case_gui.lock
+__pycache__/
+*.pyc
+
+# Ad hoc/scratch test output that shouldn't have been left in the repo
+_test_*/
+case_test.txt
+test_file.txt
+
+# Personal utility script unrelated to CASE itself
+backup_reminder.ps1

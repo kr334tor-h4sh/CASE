@@ -1,0 +1,1358 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>CASE</title>
+<style>
+  :root {
+    --bg: #1a1d1e;
+    --bg-input: #242829;
+    --fg: #d8dcdd;
+    --fg-dim: #7a8082;
+    --accent: #4a9c8f;
+    --accent-hover: #5cb3a5;
+    --you: #8ab4d8;
+    --error: #d87a7a;
+    --border: #33393a;
+  }
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0; padding: 0; height: 100%;
+    background: var(--bg); color: var(--fg);
+    font-family: "Segoe UI", system-ui, sans-serif;
+    font-size: 14px;
+    user-select: text;
+  }
+  #app { display: flex; flex-direction: row; height: 100vh; }
+  #main { display: flex; flex-direction: column; flex: 1; min-width: 0; height: 100vh; }
+
+  #sidebar {
+    width: 200px; flex-shrink: 0; background: var(--bg-input);
+    border-right: 1px solid var(--border); display: flex; flex-direction: column;
+    overflow-y: auto; padding: 10px 0;
+  }
+  .sidebar-section-header {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 10px 14px 4px; font-size: 11px; font-weight: 700;
+    color: var(--fg-dim); text-transform: uppercase; letter-spacing: 0.03em;
+  }
+  .sidebar-section-header .icon-btn.small {
+    padding: 2px 7px; font-size: 13px; line-height: 1;
+  }
+  .sidebar-item {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 7px 14px; font-size: 13px; color: var(--fg); cursor: pointer;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis; gap: 6px;
+  }
+  .sidebar-item:hover { background: var(--border); }
+  .sidebar-item.active { background: var(--border); color: var(--accent); font-weight: 700; }
+  .sidebar-item .label { overflow: hidden; text-overflow: ellipsis; flex: 1; }
+  .sidebar-item .del-btn {
+    opacity: 0; flex-shrink: 0; color: var(--fg-dim); font-size: 12px;
+    padding: 0 3px;
+  }
+  .sidebar-item:hover .del-btn { opacity: 1; }
+  .sidebar-item .del-btn:hover { color: var(--error); }
+  .sidebar-empty { padding: 4px 14px; font-size: 11px; color: var(--fg-dim); font-style: italic; }
+  .sidebar-back {
+    padding: 7px 14px; font-size: 12px; color: var(--accent); cursor: pointer;
+  }
+  .sidebar-back:hover { text-decoration: underline; }
+
+  #header {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 14px 18px 10px;
+    flex-shrink: 0;
+  }
+  #header .title { font-size: 18px; font-weight: 700; color: var(--accent); }
+  #header .right { display: flex; align-items: center; gap: 10px; }
+  #status { font-size: 11px; color: var(--fg-dim); }
+  .icon-btn {
+    background: var(--bg-input); color: var(--fg); border: none;
+    border-radius: 6px; padding: 6px 12px; font-size: 12px; cursor: pointer;
+  }
+  .icon-btn:hover { background: var(--border); }
+
+  #modelSelect {
+    background: var(--bg-input); color: var(--fg); border: none;
+    border-radius: 6px; padding: 6px 8px; font-size: 12px; cursor: pointer;
+    max-width: 160px;
+  }
+
+  #modelInfoPopover {
+    position: fixed; z-index: 200; background: var(--bg-input);
+    border: 1px solid var(--border); border-radius: 8px; padding: 12px 14px;
+    font-size: 12px; line-height: 1.7; color: var(--fg); min-width: 230px;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.4);
+  }
+  #modelInfoPopover .row { display: flex; justify-content: space-between; gap: 16px; }
+  #modelInfoPopover .row .label { color: var(--fg-dim); }
+  #modelInfoPopover .row span:last-child { text-align: right; word-break: break-word; }
+
+  #settingsOverlay {
+    position: fixed; inset: 0; background: rgba(0,0,0,0.5);
+    display: flex; align-items: center; justify-content: center;
+    z-index: 100;
+  }
+  /* The browser's own [hidden] rule (display:none) has LOWER specificity
+     than the ID selector above, so #settingsOverlay's own display:flex was
+     silently winning even while the hidden attribute was correctly set -
+     the modal was visually stuck open from page load regardless of any
+     JS toggling it. This rule (ID + attribute) restores the override. */
+  #settingsOverlay[hidden] { display: none; }
+  #settingsBox {
+    width: 640px; max-width: 92vw; height: 560px; max-height: 88vh;
+    min-width: 480px; min-height: 360px;
+    background: var(--bg); border: 1px solid var(--border); border-radius: 10px;
+    display: flex; overflow: auto; resize: both;
+  }
+  #settingsNav {
+    width: 160px; flex-shrink: 0; background: var(--bg-input);
+    border-right: 1px solid var(--border); padding: 12px 0; overflow-y: auto;
+  }
+  #settingsNav .nav-item {
+    padding: 8px 16px; font-size: 13px; color: var(--fg-dim); cursor: pointer;
+  }
+  #settingsNav .nav-item:hover { color: var(--fg); background: var(--border); }
+  #settingsNav .nav-item.active { color: var(--accent); font-weight: 700; }
+  #settingsContent {
+    flex: 1; padding: 20px 24px; overflow-y: auto; display: flex;
+    flex-direction: column;
+  }
+  #settingsContent h2 { margin: 0 0 14px; font-size: 16px; color: var(--fg); }
+  #settingsContent .field-label { font-size: 12px; color: var(--fg-dim); margin-bottom: 6px; }
+  #systemPromptBox {
+    flex: 1; width: 100%; min-height: 280px; resize: none;
+    background: var(--bg-input); color: var(--fg); border: 1px solid var(--border);
+    border-radius: 8px; padding: 10px; font-family: Consolas, monospace;
+    font-size: 12px; line-height: 1.5; outline: none; box-sizing: border-box;
+  }
+  #systemPromptBox:focus { border-color: var(--accent); }
+  .settings-btn-row { display: flex; gap: 8px; margin-top: 12px; align-items: center; }
+  .settings-btn-row button {
+    border: none; border-radius: 6px; padding: 8px 14px; font-size: 12px;
+    cursor: pointer; font-weight: 700;
+  }
+  #savePromptBtn, .settings-save-btn { background: var(--accent); color: #0d0f0f; }
+  #savePromptBtn:hover, .settings-save-btn:hover { background: var(--accent-hover); }
+  #resetPromptBtn { background: var(--bg-input); color: var(--fg); }
+  #resetPromptBtn:hover { background: var(--border); }
+  .settings-radio-row { display: flex; flex-direction: column; gap: 6px; margin-bottom: 16px; }
+  .settings-radio-row label {
+    display: flex; align-items: center; gap: 8px; font-size: 13px;
+    color: var(--fg); cursor: pointer;
+  }
+  .settings-input {
+    width: 100%; box-sizing: border-box; background: var(--bg-input); color: var(--fg);
+    border: 1px solid var(--border); border-radius: 8px; padding: 8px 10px;
+    font-family: Consolas, monospace; font-size: 12px; outline: none; margin-top: 4px;
+  }
+  .settings-input:focus { border-color: var(--accent); }
+  .settings-input:disabled { opacity: 0.5; }
+  .local-model-list { font-size: 12px; color: var(--fg); margin: 6px 0 0; padding-left: 18px; }
+  .local-model-list li { margin-bottom: 2px; }
+  .field-hint { font-size: 11px; color: var(--fg-dim); margin-top: 4px; }
+  .skills-list { display: flex; flex-direction: column; gap: 6px; margin-top: 6px; }
+  .skills-empty { font-size: 12px; color: var(--fg-dim); font-style: italic; }
+  .skill-card {
+    background: var(--bg-input); border: 1px solid var(--border); border-radius: 8px;
+    padding: 8px 10px; font-size: 12px;
+  }
+  .skill-card .skill-card-top { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+  .skill-card .skill-name { font-weight: 700; color: var(--fg); }
+  .skill-card .skill-desc { color: var(--fg-dim); margin-top: 2px; }
+  .skill-card .skill-triggers { color: var(--fg-dim); font-size: 11px; margin-top: 4px; font-family: Consolas, monospace; }
+  .skill-card .remove { cursor: pointer; color: var(--fg-dim); font-weight: 700; flex-shrink: 0; }
+  .skill-card .remove:hover { color: var(--error); }
+  .import-candidate {
+    display: flex; align-items: center; justify-content: space-between; gap: 8px;
+    background: var(--bg-input); border: 1px solid var(--border); border-radius: 8px;
+    padding: 8px 10px; font-size: 12px; margin-top: 6px;
+  }
+  .import-candidate button { flex-shrink: 0; border: none; border-radius: 6px; padding: 5px 10px; font-size: 11px; font-weight: 700; cursor: pointer; background: var(--accent); color: #0d0f0f; }
+  #closeSettingsBtn {
+    background: none; color: var(--fg-dim); border: none; cursor: pointer;
+    font-size: 18px; position: absolute; top: 10px; right: 14px;
+  }
+  #settingsBox { position: relative; }
+  .placeholder-note { color: var(--fg-dim); font-size: 12px; font-style: italic; }
+  #promptSaveStatus { font-size: 11px; color: var(--accent); align-self: center; }
+
+  #write-toggle-row {
+    display: flex; align-items: center; gap: 6px;
+    font-size: 11px; color: var(--fg-dim); padding: 0 18px 10px;
+    flex-shrink: 0;
+  }
+  #write-toggle-row input { cursor: pointer; }
+  #write-toggle-row label { cursor: pointer; }
+
+  #messages {
+    flex: 1; overflow-y: auto; padding: 4px 18px 10px;
+  }
+  .msg { margin-bottom: 18px; }
+  .msg .speaker {
+    font-weight: 700; font-size: 13px; margin-bottom: 3px;
+  }
+  .msg.you .speaker { color: var(--you); }
+  .msg.case .speaker { color: var(--accent); }
+  .msg .ts { font-weight: 400; color: var(--fg-dim); font-size: 10px; margin-left: 6px; }
+  .msg .body { line-height: 1.5; white-space: pre-wrap; word-wrap: break-word; }
+  .msg.error .body { color: var(--error); }
+  .msg .reasoning { margin-bottom: 6px; }
+  .msg .reasoning summary {
+    cursor: pointer; font-size: 11px; color: var(--fg-dim); user-select: none;
+  }
+  .msg .reasoning summary:hover { color: var(--fg); }
+  .msg .reasoning-body {
+    margin-top: 6px; padding: 8px 10px; border-left: 2px solid var(--border);
+    color: var(--fg-dim); font-size: 12px; line-height: 1.5;
+    white-space: pre-wrap; word-wrap: break-word;
+  }
+  .msg.system .body { color: var(--fg-dim); font-size: 11px; font-family: Consolas, monospace; }
+  .msg .body code {
+    background: var(--bg-input); padding: 1px 5px; border-radius: 4px;
+    font-family: Consolas, monospace; font-size: 13px;
+  }
+  .msg .body pre {
+    background: var(--bg-input); padding: 10px; border-radius: 6px;
+    overflow-x: auto; font-family: Consolas, monospace; font-size: 12px;
+  }
+  .msg .body pre code { background: none; padding: 0; }
+
+  #inputRow {
+    display: flex; align-items: flex-end; gap: 8px;
+    padding: 10px 18px 16px; flex-shrink: 0;
+  }
+  #entry {
+    flex: 1; min-height: 44px; max-height: 160px; resize: none;
+    background: var(--bg-input); color: var(--fg); border: 1px solid var(--border);
+    border-radius: 8px; padding: 10px 12px; font-family: inherit; font-size: 14px;
+    outline: none;
+  }
+  #entry:focus { border-color: var(--accent); }
+  #attachBtn, #skillPickBtn {
+    background: var(--bg-input); color: var(--fg); border: none; border-radius: 8px;
+    height: 44px; width: 40px; cursor: pointer; font-size: 15px; flex-shrink: 0;
+  }
+  #attachBtn:hover, #skillPickBtn:hover { background: var(--border); }
+  #skillPickPopover {
+    position: fixed; z-index: 200; background: var(--bg-input);
+    border: 1px solid var(--border); border-radius: 8px; padding: 8px;
+    font-size: 12px; min-width: 220px; max-width: 320px; max-height: 260px;
+    overflow-y: auto; box-shadow: 0 4px 16px rgba(0,0,0,0.4);
+  }
+  #skillPickPopover .skill-pick-item {
+    padding: 7px 8px; border-radius: 6px; cursor: pointer;
+  }
+  #skillPickPopover .skill-pick-item:hover { background: var(--border); }
+  #skillPickPopover .skill-pick-name { font-weight: 700; color: var(--accent); }
+  #skillPickPopover .skill-pick-desc { color: var(--fg-dim); font-size: 11px; margin-top: 2px; }
+  #skillPickPopover .skills-empty { padding: 6px 8px; color: var(--fg-dim); font-style: italic; }
+  #sendBtn {
+    background: var(--accent); color: #0d0f0f; border: none; border-radius: 8px;
+    font-weight: 700; padding: 0 18px; height: 44px; cursor: pointer; font-size: 13px;
+  }
+  #sendBtn:hover { background: var(--accent-hover); }
+  #sendBtn:disabled { opacity: 0.5; cursor: default; }
+  #attachChip {
+    display: none; align-items: center; gap: 8px; margin: 0 18px 8px;
+    background: var(--bg-input); border: 1px solid var(--border); border-radius: 6px;
+    padding: 5px 10px; font-size: 12px; color: var(--fg); width: fit-content;
+  }
+  #attachChip.visible { display: flex; }
+  #attachChip .remove { cursor: pointer; color: var(--fg-dim); font-weight: 700; }
+  #attachChip .remove:hover { color: var(--error); }
+  #attachChip .attach-error { color: var(--error); }
+  #skillChip {
+    display: none; align-items: center; gap: 8px; margin: 0 18px 8px;
+    background: var(--bg-input); border: 1px solid var(--border); border-radius: 6px;
+    padding: 5px 10px; font-size: 12px; color: var(--fg); width: fit-content;
+  }
+  #skillChip.visible { display: flex; }
+  #skillChip .remove { cursor: pointer; color: var(--fg-dim); font-weight: 700; }
+  #skillChip .remove:hover { color: var(--error); }
+
+  ::-webkit-scrollbar { width: 8px; }
+  ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+</style>
+</head>
+<body>
+<div id="app">
+  <div id="sidebar">
+    <div class="sidebar-section-header">
+      <span>Projects</span>
+      <button class="icon-btn small" onclick="newProject()">+</button>
+    </div>
+    <div id="projectList"></div>
+
+    <div class="sidebar-section-header">
+      <span>Chats</span>
+      <button class="icon-btn small" onclick="newChat()">+</button>
+    </div>
+    <div id="chatList"></div>
+  </div>
+
+  <div id="main">
+    <div id="header">
+      <div class="title">CASE</div>
+      <div class="right">
+        <span id="status">idle</span>
+        <select id="modelSelect" onchange="onModelChange()"></select>
+        <button class="icon-btn" id="modelInfoBtn" onclick="toggleModelInfo(event)" title="Model info">ℹ️</button>
+        <div id="modelInfoPopover" hidden></div>
+        <button class="icon-btn" onclick="copyChat(this)">📋 Copy chat</button>
+        <button class="icon-btn" onclick="openBrowser()">🔍 Browser</button>
+        <button class="icon-btn" onclick="openSettings()">⚙ Settings</button>
+      </div>
+    </div>
+    <div id="write-toggle-row">
+      <input type="checkbox" id="allowWrite">
+      <label for="allowWrite">Allow file changes (asks to confirm each one)</label>
+    </div>
+    <div id="messages"></div>
+    <div id="attachChip"></div>
+    <div id="skillChip"></div>
+    <div id="inputRow">
+      <button id="attachBtn" onclick="pickAttachment()" title="Attach a text/code file">📎</button>
+      <button id="skillPickBtn" onclick="toggleSkillPicker(event)" title="Run a manual-only skill on your next message">🎯</button>
+      <div id="skillPickPopover" hidden></div>
+      <textarea id="entry" placeholder="Message CASE..." rows="1"></textarea>
+      <button id="sendBtn" onclick="send()">Send</button>
+    </div>
+  </div>
+</div>
+
+<div id="settingsOverlay" hidden>
+  <div id="settingsBox">
+    <button id="closeSettingsBtn" onclick="closeSettings()">✕</button>
+    <div id="settingsNav">
+      <div class="nav-item active" data-section="agent" onclick="showSettingsSection('agent')">Agent</div>
+      <div class="nav-item" data-section="general" onclick="showSettingsSection('general')">General</div>
+      <div class="nav-item" data-section="voice" onclick="showSettingsSection('voice')">Voice</div>
+      <div class="nav-item" data-section="appearance" onclick="showSettingsSection('appearance')">Appearance</div>
+      <div class="nav-item" data-section="sessions" onclick="showSettingsSection('sessions')">Sessions</div>
+      <div class="nav-item" data-section="skills" onclick="showSettingsSection('skills')">Skills</div>
+      <div class="nav-item" data-section="localmodels" onclick="showSettingsSection('localmodels')">Local Models</div>
+    </div>
+    <div id="settingsContent">
+      <!-- filled by JS per section -->
+    </div>
+  </div>
+</div>
+
+<script>
+let busy = false;
+
+function timestamp() {
+  const d = new Date();
+  return d.toLocaleTimeString([], {hour: '2-digit', minute: '2-digit'});
+}
+
+// Minimal, dependency-free markdown-lite: **bold**, `code`, ```blocks```, newlines.
+// Not a full markdown parser on purpose - no CDN, no external lib, works fully offline.
+function renderBody(text) {
+  let escaped = text
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;");
+  escaped = escaped.replace(/```([\s\S]*?)```/g, (m, code) => `<pre><code>${code.trim()}</code></pre>`);
+  escaped = escaped.replace(/`([^`]+)`/g, "<code>$1</code>");
+  escaped = escaped.replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>");
+  return escaped;
+}
+
+function appendMessage(speaker, cssClass, text, showTime = true, reasoning = null) {
+  const container = document.getElementById("messages");
+  const div = document.createElement("div");
+  div.className = "msg " + cssClass;
+  // showTime=false for replayed history - the real time a past message was
+  // sent isn't stored, so showing "now" for it would just be wrong.
+  const tsSpan = showTime ? `<span class="ts">${timestamp()}</span>` : "";
+  const speakerLine = speaker ? `<div class="speaker">${speaker}${tsSpan}</div>` : "";
+  // Collapsed by default (a <details> with no "open" attribute) - the
+  // local model's raw <think> reasoning, when it emitted one, shown on
+  // demand instead of either hiding it entirely or cluttering every reply.
+  const reasoningHtml = reasoning
+    ? `<details class="reasoning"><summary>🧠 Reasoning</summary><div class="reasoning-body">${renderBody(reasoning)}</div></details>`
+    : "";
+  div.innerHTML = speakerLine + reasoningHtml + `<div class="body">${renderBody(text)}</div>`;
+  container.appendChild(div);
+  container.scrollTop = container.scrollHeight;
+}
+
+function setBusy(isBusy) {
+  busy = isBusy;
+  document.getElementById("sendBtn").disabled = isBusy;
+  document.getElementById("status").textContent = isBusy ? "thinking…" : "idle";
+}
+
+let pendingAttachment = null;
+
+async function pickAttachment() {
+  const result = await window.pywebview.api.pick_attachment();
+  if (!result) return;  // dialog cancelled
+  const chip = document.getElementById("attachChip");
+  if (result.error) {
+    chip.innerHTML = `<span class="attach-error">📎 ${escapeHtml(result.name)}: ${escapeHtml(result.error)}</span> <span class="remove" onclick="clearAttachment()">✕</span>`;
+    chip.classList.add("visible");
+    pendingAttachment = null;
+    return;
+  }
+  pendingAttachment = result;
+  chip.innerHTML = `<span>📎 ${escapeHtml(result.name)}</span> <span class="remove" onclick="clearAttachment()">✕</span>`;
+  chip.classList.add("visible");
+}
+
+function clearAttachment() {
+  pendingAttachment = null;
+  const chip = document.getElementById("attachChip");
+  chip.classList.remove("visible");
+  chip.innerHTML = "";
+}
+
+let pendingSkillName = null;
+
+async function toggleSkillPicker(e) {
+  e.stopPropagation();
+  const pop = document.getElementById("skillPickPopover");
+  if (!pop.hidden) {
+    pop.hidden = true;
+    return;
+  }
+  const skills = await window.pywebview.api.list_manual_skills();
+  pop.innerHTML = skills.length
+    ? skills.map((s) => `
+        <div class="skill-pick-item" onclick="pickSkill('${escapeHtml(s.name)}')">
+          <div class="skill-pick-name">${escapeHtml(s.name)}</div>
+          <div class="skill-pick-desc">${escapeHtml(s.description || "")}</div>
+        </div>
+      `).join("")
+    : `<div class="skills-empty">No manual-only skills yet - import one from Settings > Skills with "Manual only" mode.</div>`;
+  const btn = document.getElementById("skillPickBtn");
+  const rect = btn.getBoundingClientRect();
+  pop.style.bottom = (window.innerHeight - rect.top + 6) + "px";
+  pop.style.left = rect.left + "px";
+  pop.hidden = false;
+}
+
+function pickSkill(name) {
+  pendingSkillName = name;
+  document.getElementById("skillPickPopover").hidden = true;
+  const chip = document.getElementById("skillChip");
+  chip.innerHTML = `<span>🎯 ${escapeHtml(name)}</span> <span class="remove" onclick="clearPendingSkill()">✕</span>`;
+  chip.classList.add("visible");
+}
+
+function clearPendingSkill() {
+  pendingSkillName = null;
+  const chip = document.getElementById("skillChip");
+  chip.classList.remove("visible");
+  chip.innerHTML = "";
+}
+
+document.addEventListener("click", (e) => {
+  const pop = document.getElementById("skillPickPopover");
+  if (pop && !pop.hidden && !pop.contains(e.target) && e.target.id !== "skillPickBtn") {
+    pop.hidden = true;
+  }
+});
+
+async function send() {
+  if (busy) return;
+  const entry = document.getElementById("entry");
+  const text = entry.value.trim();
+  if (!text && !pendingAttachment) return;
+  entry.value = "";
+  autoGrow(entry);
+  const attachment = pendingAttachment;
+  clearAttachment();
+  const skillName = pendingSkillName;
+  clearPendingSkill();
+  const displayText = attachment ? `${text}\n\n📎 ${attachment.name}` : text;
+  appendMessage("You", "you", displayText);
+  setBusy(true);
+
+  const allowWrite = document.getElementById("allowWrite").checked;
+  try {
+    const result = await window.pywebview.api.send_message(text, allowWrite, attachment, skillName);
+    appendMessage("CASE", "case", result.answer, true, result.reasoning);
+  } catch (err) {
+    appendMessage("CASE", "error", "Something went wrong: " + err);
+  }
+  setBusy(false);
+  refreshSidebar();  // picks up the auto-generated title after a first message
+}
+
+async function openBrowser() {
+  const result = await window.pywebview.api.open_browser("");
+  appendMessage(null, "system", "[Browser] " + result);
+}
+
+async function toggleModelInfo(e) {
+  e.stopPropagation();
+  const pop = document.getElementById("modelInfoPopover");
+  if (!pop.hidden) {
+    pop.hidden = true;
+    return;
+  }
+  const info = await window.pywebview.api.get_model_info_summary();
+  const row = (label, value) => `<div class="row"><span class="label">${label}</span><span>${value}</span></div>`;
+  let html = row("Backend", info.backend === "local" ? "Local" : "Remote");
+  html += row("Model", escapeHtml(info.model_label || "—"));
+  if (info.backend === "local") {
+    html += row("Loaded", info.loaded ? "Yes" : "Not yet (loads on first message)");
+    html += row("Context", info.n_ctx != null ? info.n_ctx : "—");
+    let gpuLine;
+    if (!info.gpu_backend_available) gpuLine = "no GPU backend available";
+    else if (info.n_gpu_layers == null) gpuLine = "not loaded yet";
+    else if (info.n_gpu_layers === -1) gpuLine = "all layers (full offload)";
+    else if (info.n_gpu_layers === 0) gpuLine = "CPU only";
+    else gpuLine = `${info.n_gpu_layers} layers`;
+    html += row("GPU offload", gpuLine);
+    html += row("GPU", escapeHtml(info.gpu_name || "not detected"));
+  }
+  pop.innerHTML = html;
+  const btn = document.getElementById("modelInfoBtn");
+  const rect = btn.getBoundingClientRect();
+  pop.style.top = (rect.bottom + 6) + "px";
+  pop.style.right = (window.innerWidth - rect.right) + "px";
+  pop.hidden = false;
+}
+
+document.addEventListener("click", (e) => {
+  const pop = document.getElementById("modelInfoPopover");
+  if (!pop.hidden && !pop.contains(e.target) && e.target.id !== "modelInfoBtn") {
+    pop.hidden = true;
+  }
+});
+
+async function copyChat(btn) {
+  const text = document.getElementById("messages").innerText;
+  const original = btn.textContent;
+  try {
+    await navigator.clipboard.writeText(text);
+    btn.textContent = "Copied!";
+  } catch (err) {
+    btn.textContent = "Copy failed";
+  }
+  setTimeout(() => { btn.textContent = original; }, 1200);
+}
+
+function autoGrow(el) {
+  el.style.height = "auto";
+  el.style.height = Math.min(el.scrollHeight, 160) + "px";
+}
+
+document.getElementById("entry").addEventListener("input", (e) => autoGrow(e.target));
+document.getElementById("entry").addEventListener("keydown", (e) => {
+  if (e.key === "Enter" && !e.shiftKey) {
+    e.preventDefault();
+    send();
+  }
+});
+
+window.addEventListener("pywebviewready", async () => {
+  loadModels();
+  const record = await window.pywebview.api.get_current_session();
+  currentChatId = record.id;
+  renderFullHistory(record.history);
+  refreshSidebar();
+  setInterval(pollVoiceEvents, 500);
+});
+
+// Persists a drag-resize of the Settings box (see openSettings() for the
+// restore side) - fires on every resize, including the native browser
+// resize handle in #settingsBox's bottom-right corner.
+new ResizeObserver((entries) => {
+  for (const entry of entries) {
+    const { width, height } = entry.contentRect;
+    if (width > 0 && height > 0) {
+      localStorage.setItem(SETTINGS_BOX_SIZE_KEY, JSON.stringify({ w: Math.round(width), h: Math.round(height) }));
+    }
+  }
+}).observe(document.getElementById("settingsBox"));
+
+// --- Voice (mic -> case_agent.ask() -> optional TTS reply) ---
+// Runs continuously (not just while Settings is open) so a spoken message
+// lands in the chat and gets a reply the same way a typed one would - the
+// Voice settings tab only controls whether the mic/speaker are ON, not
+// whether this loop itself runs.
+async function pollVoiceEvents() {
+  if (busy) return;  // don't let a voice turn overlap a typed one mid-flight
+  let pairs;
+  try {
+    const allowWrite = document.getElementById("allowWrite").checked;
+    pairs = await window.pywebview.api.poll_voice_events(allowWrite);
+  } catch (err) {
+    return;  // voice not started yet, or a transient error - next poll retries
+  }
+  if (!pairs || !pairs.length) return;
+  setBusy(true);
+  for (const pair of pairs) {
+    appendMessage("You", "you", pair.user);
+    appendMessage("CASE", "case", pair.assistant, true, pair.reasoning);
+  }
+  setBusy(false);
+  refreshSidebar();
+}
+
+// --- Sessions / Projects ---
+let currentChatId = null;
+let selectedProjectFilter = null;  // null = show all chats, else filter to one project
+
+function escapeHtml(text) {
+  const div = document.createElement("div");
+  div.textContent = text;
+  return div.innerHTML;
+}
+
+function renderFullHistory(history) {
+  document.getElementById("messages").innerHTML = "";
+  for (const msg of history) {
+    if (msg.role === "user" && typeof msg.content === "string" && !msg.content.startsWith("[The user just clicked")) {
+      appendMessage("You", "you", msg.content, false);
+    } else if (msg.role === "assistant" && msg.content) {
+      appendMessage("CASE", "case", msg.content, false, msg.reasoning || null);
+    }
+  }
+  if (history.length <= 1) {
+    appendMessage(null, "system",
+      "CASE — local fallback assistant (standalone, no Bionic dependency)\n" +
+      "Agent: this PC.  Model: Mac mini.\n" +
+      "Check 'Allow file changes' to let CASE write/delete files - you'll get a real confirmation prompt for each one first."
+    );
+  }
+}
+
+async function refreshSidebar() {
+  const [projects, chats] = await Promise.all([
+    window.pywebview.api.list_projects(),
+    window.pywebview.api.list_chats(),
+  ]);
+  renderProjectList(projects);
+  renderChatList(chats);
+}
+
+function renderProjectList(projects) {
+  const container = document.getElementById("projectList");
+  container.innerHTML = "";
+  if (!projects || projects.length === 0) {
+    container.innerHTML = '<div class="sidebar-empty">No projects yet</div>';
+    return;
+  }
+  for (const p of projects) {
+    const div = document.createElement("div");
+    div.className = "sidebar-item" + (selectedProjectFilter === p.id ? " active" : "");
+    div.innerHTML = `<span class="label">${escapeHtml(p.name)}</span>` +
+      `<span class="del-btn" onclick="event.stopPropagation(); deleteProject('${p.id}')">🗑</span>`;
+    div.addEventListener("click", () => {
+      selectedProjectFilter = (selectedProjectFilter === p.id) ? null : p.id;
+      refreshSidebar();
+    });
+    container.appendChild(div);
+  }
+}
+
+function renderChatList(allChats) {
+  const container = document.getElementById("chatList");
+  container.innerHTML = "";
+  const chats = selectedProjectFilter
+    ? allChats.filter((c) => c.project_id === selectedProjectFilter)
+    : allChats;
+  if (selectedProjectFilter) {
+    const back = document.createElement("div");
+    back.className = "sidebar-back";
+    back.textContent = "◀ All chats";
+    back.addEventListener("click", () => { selectedProjectFilter = null; refreshSidebar(); });
+    container.appendChild(back);
+  }
+  if (!chats || chats.length === 0) {
+    container.innerHTML += '<div class="sidebar-empty">No chats yet</div>';
+    return;
+  }
+  for (const c of chats) {
+    const div = document.createElement("div");
+    div.className = "sidebar-item" + (c.id === currentChatId ? " active" : "");
+    div.innerHTML = `<span class="label">${escapeHtml(c.title)}</span>` +
+      `<span class="del-btn" onclick="event.stopPropagation(); deleteChat('${c.id}')">🗑</span>`;
+    div.addEventListener("click", () => switchChat(c.id));
+    container.appendChild(div);
+  }
+}
+
+async function newChat() {
+  const record = await window.pywebview.api.new_chat(selectedProjectFilter);
+  currentChatId = record.id;
+  renderFullHistory(record.history);
+  refreshSidebar();
+}
+
+async function newProject() {
+  let name;
+  try {
+    name = prompt("Project name:");
+  } catch (err) {
+    appendMessage(null, "error", "Could not open the name prompt: " + err);
+    return;
+  }
+  if (!name) return;
+  await window.pywebview.api.create_project(name);
+  refreshSidebar();
+}
+
+async function deleteProject(projectId) {
+  await window.pywebview.api.delete_project(projectId);
+  if (selectedProjectFilter === projectId) selectedProjectFilter = null;
+  refreshSidebar();
+}
+
+async function switchChat(sessionId) {
+  if (sessionId === currentChatId) return;
+  const record = await window.pywebview.api.switch_chat(sessionId);
+  currentChatId = record.id;
+  renderFullHistory(record.history);
+  refreshSidebar();
+}
+
+async function deleteChat(sessionId) {
+  await window.pywebview.api.delete_chat(sessionId);
+  if (sessionId === currentChatId) {
+    const record = await window.pywebview.api.get_current_session();
+    currentChatId = record.id;
+    renderFullHistory(record.history);
+  }
+  refreshSidebar();
+}
+
+// --- Model switcher ---
+async function loadModels() {
+  const select = document.getElementById("modelSelect");
+  try {
+    const [models, current] = await Promise.all([
+      window.pywebview.api.list_models(),
+      window.pywebview.api.get_current_model(),
+    ]);
+    select.innerHTML = "";
+    if (!models || models.length === 0) {
+      const opt = document.createElement("option");
+      opt.textContent = current || "(unreachable)";
+      opt.value = current || "";
+      select.appendChild(opt);
+      return;
+    }
+    for (const m of models) {
+      const opt = document.createElement("option");
+      opt.value = m;
+      opt.textContent = m;
+      if (m === current) opt.selected = true;
+      select.appendChild(opt);
+    }
+  } catch (err) {
+    select.innerHTML = "<option>(unreachable)</option>";
+  }
+}
+
+async function onModelChange() {
+  const select = document.getElementById("modelSelect");
+  await window.pywebview.api.set_model(select.value);
+}
+
+// --- Settings ---
+const SETTINGS_BOX_SIZE_KEY = "case_settings_box_size";
+
+function openSettings() {
+  document.getElementById("settingsOverlay").hidden = false;
+  // Restore the last size Sati dragged it to (native CSS `resize: both` on
+  // #settingsBox does NOT persist across reopens/relaunches on its own -
+  // this is the small bit of extra JS that makes it actually stick).
+  try {
+    const saved = JSON.parse(localStorage.getItem(SETTINGS_BOX_SIZE_KEY) || "null");
+    if (saved && saved.w && saved.h) {
+      const box = document.getElementById("settingsBox");
+      box.style.width = saved.w + "px";
+      box.style.height = saved.h + "px";
+    }
+  } catch (e) { /* corrupted/missing - just use the CSS default size */ }
+  showSettingsSection("agent");
+}
+
+function closeSettings() {
+  document.getElementById("settingsOverlay").hidden = true;
+}
+
+// Redundant ways to close, in case the small ✕ button is missed or somehow
+// doesn't register a click - clicking the dark backdrop (not the box itself)
+// or pressing Escape both close it too. This is standard modal UX anyway.
+document.getElementById("settingsOverlay").addEventListener("click", (e) => {
+  if (e.target.id === "settingsOverlay") closeSettings();
+});
+document.addEventListener("keydown", (e) => {
+  if (e.key === "Escape" && !document.getElementById("settingsOverlay").hidden) {
+    closeSettings();
+  }
+});
+
+const SETTINGS_LABELS = {
+  agent: "Agent", general: "General", voice: "Voice",
+  appearance: "Appearance", sessions: "Sessions", skills: "Skills", localmodels: "Local Models",
+};
+
+async function showSettingsSection(name) {
+  document.querySelectorAll("#settingsNav .nav-item").forEach((el) => {
+    el.classList.toggle("active", el.dataset.section === name);
+  });
+  const content = document.getElementById("settingsContent");
+  if (name === "agent") {
+    content.innerHTML = `
+      <h2>Agent</h2>
+      <div class="field-label">System prompt</div>
+      <textarea id="systemPromptBox" spellcheck="false"></textarea>
+      <div class="settings-btn-row">
+        <button id="savePromptBtn" onclick="saveSystemPrompt()">Save</button>
+        <button id="resetPromptBtn" onclick="resetSystemPromptToDefault()">Reset to default</button>
+        <span id="promptSaveStatus"></span>
+      </div>
+    `;
+    const box = document.getElementById("systemPromptBox");
+    box.value = await window.pywebview.api.get_system_prompt();
+  } else if (name === "skills") {
+    content.innerHTML = `
+      <h2>Skills</h2>
+      <div class="field-label">Installed</div>
+      <div id="installedSkillsList" class="skills-list"></div>
+      <div class="field-label" style="margin-top:16px;">Add a skill</div>
+      <div class="settings-btn-row">
+        <button class="settings-save-btn" onclick="pickSkillFileUI()">📁 Import .md file</button>
+        <button onclick="scanForImportableSkills()">🔍 Scan for skills on this device</button>
+      </div>
+      <div id="skillScanResults"></div>
+      <div id="skillImportForm"></div>
+      <div class="settings-btn-row"><span id="skillsStatus"></span></div>
+    `;
+    await renderInstalledSkills();
+  } else if (name === "localmodels") {
+    content.innerHTML = `
+      <h2>Local Models</h2>
+      <div class="settings-radio-row">
+        <label><input type="radio" name="backendChoice" value="remote" onchange="onBackendChoiceChange()"> Remote server (LM Studio / Bionic over HTTP)</label>
+        <label><input type="radio" name="backendChoice" value="local" onchange="onBackendChoiceChange()"> Local model file (loaded directly, no server)</label>
+      </div>
+      <div id="remoteEndpointField">
+        <div class="field-label">Remote endpoint (LAN IP or Tailscale address)</div>
+        <input type="text" id="remoteEndpointInput" class="settings-input" placeholder="http://localhost:1234">
+        <div class="field-hint">Any OpenAI-compatible host: localhost, a LAN IP, or a Tailscale address if that machine is joined to a tailnet.</div>
+      </div>
+      <div id="localModelField" style="margin-top:14px;">
+        <div id="gpuStatusBlock" class="field-hint" style="margin-bottom:8px;"></div>
+        <div class="settings-btn-row" style="margin-bottom:10px;">
+          <button onclick="unloadLocalModelUI()" title="Frees the currently loaded local model's GPU/RAM immediately - switching the backend radio to Remote does NOT do this on its own">⏏️ Unload local model</button>
+          <span id="unloadLocalModelStatus"></span>
+        </div>
+        <div class="field-label" style="display:flex; align-items:center; justify-content:space-between;">
+          <span>Detected .gguf files</span>
+          <button class="icon-btn" style="padding:3px 8px; font-size:11px;" onclick="loadBackendSettings()" title="Re-scan for newly dropped/downloaded files">🔄 Refresh</button>
+        </div>
+        <div id="localModelList"></div>
+        <div class="field-hint" id="localModelHint"></div>
+        <div class="settings-btn-row" style="margin-top:8px;">
+          <button onclick="pickLocalModelFileUI()">📁 Browse for a .gguf file anywhere on disk</button>
+          <span id="localModelPickStatus"></span>
+        </div>
+        <div class="field-hint">For a model kept outside the two folders above (e.g. a different drive) - picks the exact file directly, no need to move or link it first.</div>
+      </div>
+      <div style="margin-top:14px; border-top:1px solid var(--border); padding-top:14px;">
+        <label style="display:flex; align-items:flex-start; gap:8px; font-size:13px; cursor:pointer;">
+          <input type="checkbox" id="subagentEnabledCheckbox" onchange="onSubagentEnabledChange()" style="margin-top:2px; cursor:pointer;">
+          <span>Enable subagent (lets CASE delegate a bounded research task to a second model, freeing this conversation's own budget)</span>
+        </label>
+        <div id="subagentFields" style="margin-top:10px;">
+          <div class="field-label">Subagent endpoint (optional)</div>
+          <input type="text" id="subagentEndpointInput" class="settings-input" placeholder="blank = same server as above">
+          <div class="field-hint">Blank = reuse the endpoint above (a second model loaded ALONGSIDE the main one on the same server, e.g. LM Studio's Multi Model Session). Set a different URL to delegate to a genuinely separate machine instead.</div>
+          <div class="field-label" style="margin-top:10px;">Subagent model (optional)</div>
+          <input type="text" id="subagentModelInput" class="settings-input" placeholder="blank = same model as above">
+          <div class="field-hint">Set this to the id of the second/other model so the subagent actually uses different compute, not just a duplicate call to the same one.</div>
+        </div>
+      </div>
+      <div class="settings-btn-row">
+        <button class="settings-save-btn" onclick="saveBackendSettings()">Save</button>
+        <span id="backendSaveStatus"></span>
+      </div>
+    `;
+    await loadBackendSettings();
+  } else if (name === "general") {
+    content.innerHTML = `
+      <h2>General</h2>
+      <div class="field-label">Workspace folder</div>
+      <div style="display:flex; gap:6px;">
+        <input type="text" id="projectRootInput" class="settings-input" style="margin-top:0;">
+        <button class="icon-btn" onclick="browseWorkspaceFolder('projectRootInput')">📁 Browse</button>
+      </div>
+      <div class="field-hint">Where list_directory/read_file/search_files/write_file operate - same setting every CASE client shares (GUI, CLI, and the Android file server, since they all read this same config).</div>
+      <div class="field-label" style="margin-top:12px;">Memory folder</div>
+      <div style="display:flex; gap:6px;">
+        <input type="text" id="memoryRootInput" class="settings-input" style="margin-top:0;">
+        <button class="icon-btn" onclick="browseWorkspaceFolder('memoryRootInput')">📁 Browse</button>
+      </div>
+      <div class="field-hint">Where memory_reflect and MEMORY.md lookups point.</div>
+      <div class="settings-btn-row">
+        <button class="settings-save-btn" onclick="saveWorkspaceSettings()">Save</button>
+        <button onclick="resetWorkspaceSettings()">Reset both to default</button>
+        <span id="workspaceStatus"></span>
+      </div>
+      <label style="display:flex; align-items:flex-start; gap:8px; font-size:13px; cursor:pointer; margin-top:20px; border-top:1px solid var(--border); padding-top:16px;">
+        <input type="checkbox" id="mcpWriteCheckbox" onchange="onMcpWriteChange()" style="margin-top:2px; cursor:pointer;">
+        <span>Allow Bionic-native chat to write/delete files (via the case-context MCP integration)</span>
+      </label>
+      <div class="field-hint" style="margin-top:6px;">
+        Off by default: this path's write safety relies entirely on Bionic's own confirmation prompt, which case_mcp_server.py has no independent fallback for (unlike this GUI's own confirmation dialog). Only turn this on after confirming live in Bionic's chat that a write actually pauses for a real confirmation click.
+      </div>
+      <div class="settings-btn-row"><span id="mcpWriteStatus"></span></div>
+    `;
+    const ws = await window.pywebview.api.get_workspace_settings();
+    document.getElementById("projectRootInput").value = ws.project_root;
+    document.getElementById("memoryRootInput").value = ws.memory_root;
+    document.getElementById("mcpWriteCheckbox").checked = await window.pywebview.api.get_mcp_write_enabled();
+  } else if (name === "voice") {
+    content.innerHTML = `
+      <h2>Voice</h2>
+      <div id="voiceDepsWarning" class="field-hint" style="display:none;"></div>
+      <div id="voiceBody">
+        <div class="field-label">Microphone</div>
+        <select id="voiceDeviceSelect" class="settings-input"></select>
+        <div class="settings-btn-row" style="margin-top:10px;">
+          <button id="voiceListenBtn" onclick="toggleVoiceListening()">🎤 Start listening</button>
+          <label style="display:flex; align-items:center; gap:6px; font-size:13px; cursor:pointer; margin-left:10px;">
+            <input type="checkbox" id="voiceSpeakCheckbox" onchange="onVoiceSpeakChange()"> Speak replies out loud
+          </label>
+        </div>
+        <div class="field-hint" id="voiceStatusLine" style="margin-top:8px;"></div>
+        <div style="margin-top:16px; border-top:1px solid var(--border); padding-top:14px;">
+          <div class="field-label">Voice reference clip (for text-to-speech)</div>
+          <div style="display:flex; gap:6px;">
+            <input type="text" id="voiceRefClipInput" class="settings-input" style="margin-top:0;">
+            <button class="icon-btn" onclick="pickVoiceRefClip()">📁 Browse</button>
+          </div>
+          <div class="field-label" style="margin-top:10px;">Reference text (what's actually said in that clip)</div>
+          <textarea id="voiceRefTextInput" class="settings-input" rows="3" style="resize:vertical;"></textarea>
+          <div class="field-hint" id="voiceDefaultNote" style="margin-top:6px;"></div>
+          <div class="settings-btn-row">
+            <button class="settings-save-btn" onclick="saveVoiceConfig()">Save</button>
+            <span id="voiceSaveStatus"></span>
+          </div>
+        </div>
+      </div>
+    `;
+    await loadVoiceSettings();
+  } else if (name === "sessions") {
+    content.innerHTML = `
+      <h2>Sessions</h2>
+      <div class="field-label">Storage</div>
+      <div class="field-hint" id="sessionsStorageInfo">Loading…</div>
+      <div class="field-label" style="margin-top:16px;">Auto-delete chats older than (days)</div>
+      <div style="display:flex; gap:6px;">
+        <input type="number" id="sessionsRetentionInput" class="settings-input" min="1" placeholder="never (default)" style="margin-top:0;">
+        <button class="settings-save-btn" onclick="saveSessionsRetention()">Save</button>
+      </div>
+      <div class="field-hint">Runs automatically each time CASE starts. Leave blank to keep every chat forever.</div>
+      <div class="settings-btn-row" style="margin-top:14px;">
+        <button onclick="runSessionsCleanupNow()">🧹 Clean up now</button>
+        <span id="sessionsCleanupStatus"></span>
+      </div>
+    `;
+    await loadSessionsSettings();
+  } else {
+    content.innerHTML = `<h2>${SETTINGS_LABELS[name]}</h2><div class="placeholder-note">Nothing here yet - not built out for CASE, cut or fill in later.</div>`;
+  }
+}
+
+// --- Sessions settings tab ---
+function formatBytes(bytes) {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+async function loadSessionsSettings() {
+  const info = await window.pywebview.api.get_sessions_settings();
+  document.getElementById("sessionsStorageInfo").textContent =
+    `${info.count} chat${info.count === 1 ? "" : "s"} stored, ${formatBytes(info.total_bytes)} total, at ${info.dir}`;
+  document.getElementById("sessionsRetentionInput").value = info.retention_days || "";
+}
+
+async function saveSessionsRetention() {
+  const raw = document.getElementById("sessionsRetentionInput").value;
+  const status = await window.pywebview.api.set_sessions_retention(raw ? parseInt(raw, 10) : null);
+  document.getElementById("sessionsCleanupStatus").textContent = status;
+  await loadSessionsSettings();
+}
+
+async function runSessionsCleanupNow() {
+  const status = await window.pywebview.api.run_sessions_cleanup_now();
+  document.getElementById("sessionsCleanupStatus").textContent = status;
+  const record = await window.pywebview.api.get_current_session();
+  if (record.id !== currentChatId) {
+    currentChatId = record.id;
+    renderFullHistory(record.history);
+  }
+  refreshSidebar();
+  await loadSessionsSettings();
+}
+
+// --- Voice settings tab ---
+async function loadVoiceSettings() {
+  const settings = await window.pywebview.api.get_voice_settings();
+
+  const warning = document.getElementById("voiceDepsWarning");
+  const body = document.getElementById("voiceBody");
+  if (!settings.deps_available) {
+    warning.style.display = "block";
+    warning.innerHTML = "⚠️ Voice dependencies aren't installed (faster-whisper, torch, sounddevice, soundfile, f5-tts). " +
+      "Install them to use voice - see the TARS Voice project's requirements.txt for the exact package list.";
+    body.style.opacity = "0.4";
+    body.style.pointerEvents = "none";
+  } else {
+    warning.style.display = "none";
+    body.style.opacity = "1";
+    body.style.pointerEvents = "auto";
+  }
+
+  const select = document.getElementById("voiceDeviceSelect");
+  select.innerHTML = settings.devices.length
+    ? settings.devices.map(d => `<option value="${d.index}">${escapeHtml(d.label)}</option>`).join("")
+    : `<option value="">No microphone found</option>`;
+  if (settings.config.mic_device !== null && settings.config.mic_device !== undefined) {
+    select.value = settings.config.mic_device;
+  }
+
+  document.getElementById("voiceRefClipInput").value = settings.config.ref_clip;
+  document.getElementById("voiceRefTextInput").value = settings.config.ref_text;
+  document.getElementById("voiceDefaultNote").textContent = settings.config.using_default_voice
+    ? "Using TARS Voice's reference clip as a placeholder - point this at a different clip any time to give CASE its own distinct voice."
+    : "";
+
+  updateVoiceStatusUI(settings.status);
+}
+
+function updateVoiceStatusUI(status) {
+  const btn = document.getElementById("voiceListenBtn");
+  const line = document.getElementById("voiceStatusLine");
+  if (!btn || !line) return;  // tab isn't open right now
+  btn.textContent = status.listening ? "🎤 Stop listening" : "🎤 Start listening";
+  document.getElementById("voiceSpeakCheckbox").checked = status.speaking_enabled;
+  const parts = [];
+  if (status.models_loading) parts.push("voice models still loading in the background (first use takes a while)");
+  if (status.load_error) parts.push("error: " + status.load_error);
+  if (status.listening) parts.push(status.currently_speaking ? "speaking…" : "listening…");
+  line.textContent = parts.join(" — ") || (status.models_ready ? "ready" : "");
+}
+
+async function toggleVoiceListening() {
+  const btn = document.getElementById("voiceListenBtn");
+  const status = await window.pywebview.api.get_voice_status();
+  let result;
+  if (status.listening) {
+    result = await window.pywebview.api.stop_voice_listening();
+  } else {
+    const deviceVal = document.getElementById("voiceDeviceSelect").value;
+    result = await window.pywebview.api.start_voice_listening(deviceVal === "" ? null : parseInt(deviceVal, 10));
+  }
+  document.getElementById("voiceStatusLine").textContent = result;
+  updateVoiceStatusUI(await window.pywebview.api.get_voice_status());
+}
+
+async function onVoiceSpeakChange() {
+  const checked = document.getElementById("voiceSpeakCheckbox").checked;
+  await window.pywebview.api.set_voice_speaking_enabled(checked);
+}
+
+async function pickVoiceRefClip() {
+  const path = await window.pywebview.api.pick_voice_ref_clip();
+  if (path) document.getElementById("voiceRefClipInput").value = path;
+}
+
+async function saveVoiceConfig() {
+  const deviceVal = document.getElementById("voiceDeviceSelect").value;
+  const refClip = document.getElementById("voiceRefClipInput").value.trim();
+  const refText = document.getElementById("voiceRefTextInput").value.trim();
+  const status = document.getElementById("voiceSaveStatus");
+  status.textContent = await window.pywebview.api.save_voice_config(
+    deviceVal === "" ? null : parseInt(deviceVal, 10), refClip, refText
+  );
+  setTimeout(() => { status.textContent = ""; }, 3000);
+}
+
+async function onMcpWriteChange() {
+  const checked = document.getElementById("mcpWriteCheckbox").checked;
+  const status = document.getElementById("mcpWriteStatus");
+  status.textContent = await window.pywebview.api.save_mcp_write_enabled(checked);
+  setTimeout(() => { status.textContent = ""; }, 4000);
+}
+
+async function browseWorkspaceFolder(inputId) {
+  const picked = await window.pywebview.api.pick_workspace_folder();
+  if (picked) document.getElementById(inputId).value = picked;
+}
+
+async function saveWorkspaceSettings() {
+  const projectRoot = document.getElementById("projectRootInput").value.trim();
+  const memoryRoot = document.getElementById("memoryRootInput").value.trim();
+  const status = document.getElementById("workspaceStatus");
+  status.textContent = await window.pywebview.api.save_workspace_settings(projectRoot, memoryRoot);
+  setTimeout(() => { status.textContent = ""; }, 5000);
+}
+
+async function resetWorkspaceSettings() {
+  const status = document.getElementById("workspaceStatus");
+  status.textContent = await window.pywebview.api.reset_workspace_settings();
+  const ws = await window.pywebview.api.get_workspace_settings();
+  document.getElementById("projectRootInput").value = ws.project_root;
+  document.getElementById("memoryRootInput").value = ws.memory_root;
+  setTimeout(() => { status.textContent = ""; }, 5000);
+}
+
+async function loadBackendSettings() {
+  const settings = await window.pywebview.api.get_backend_settings();
+  document.querySelector(`input[name="backendChoice"][value="${settings.backend}"]`).checked = true;
+  document.getElementById("remoteEndpointInput").value = settings.remote_endpoint;
+  document.getElementById("subagentEnabledCheckbox").checked = !!settings.subagent_enabled;
+  document.getElementById("subagentEndpointInput").value = settings.subagent_endpoint || "";
+  document.getElementById("subagentModelInput").value = settings.subagent_model || "";
+  onSubagentEnabledChange();
+  const list = document.getElementById("localModelList");
+  const hint = document.getElementById("localModelHint");
+  const gpuBlock = document.getElementById("gpuStatusBlock");
+  const llmStatus = settings.local_llm_status || {};
+  const gpu = llmStatus.gpu;
+  const loadedLayers = llmStatus.n_gpu_layers;
+  const backendAvailable = llmStatus.gpu_backend_available;
+  if (gpu && backendAvailable) {
+    const vramFreeGb = (gpu.vram_free_bytes / 1e9).toFixed(1);
+    const vramTotalGb = (gpu.vram_total_bytes / 1e9).toFixed(1);
+    let loadedNote = "";
+    if (loadedLayers === -1) loadedNote = " — currently loaded model: full GPU offload.";
+    else if (typeof loadedLayers === "number" && loadedLayers > 0) loadedNote = ` — currently loaded model: partial GPU offload (${loadedLayers} layers).`;
+    else if (loadedLayers === 0) loadedNote = " — currently loaded model: CPU-only (GPU offload didn't fit or wasn't needed).";
+    gpuBlock.innerHTML = `🎮 GPU ready: <b>${escapeHtml(gpu.name)}</b> (${gpu.backend}) — ${vramFreeGb}GB free of ${vramTotalGb}GB VRAM right now.${loadedNote} Local models offload as many layers as fit in VRAM automatically; the rest run on CPU/RAM alongside it.`;
+  } else if (gpu && !backendAvailable) {
+    gpuBlock.innerHTML = `🎮 GPU hardware detected: <b>${escapeHtml(gpu.name)}</b> (${gpu.backend}) — but the installed llama-cpp-python build has no GPU backend compiled in, so it's running CPU-only for now. Rebuild it with GPU support enabled to use this GPU (see ANDROID_SETUP.md on Android, or the README on PC/Mac).`;
+  } else {
+    gpuBlock.innerHTML = `No usable GPU detected — local models run CPU-only (uses system RAM only).`;
+  }
+  if (settings.local_models.length) {
+    const FIT_BADGE = {
+      ok: '<span style="color: var(--accent);">✅ Should run fine</span>',
+      risky: '<span class="attach-error">⚠️ Risky on this device</span>',
+      too_heavy: '<span class="attach-error">🛑 Too heavy for this device</span>',
+      unknown: '<span class="field-hint" style="display:inline;">❔ Couldn\'t check RAM on this platform</span>',
+    };
+    const SPEED_BADGE = {
+      fast: '<span style="color: var(--accent);">⚡ Fast</span>',
+      moderate: '<span class="field-hint" style="display:inline;">🐢 Moderate</span>',
+      slow: '<span class="attach-error">🐌 Slow</span>',
+    };
+    list.innerHTML = settings.local_models.map((m) => {
+      const isSelected = m.path === settings.selected_local_model;
+      const sourceTag = m.source === "lmstudio" ? "LM Studio" : "CASE folder";
+      const companionNote = m.is_companion ? ` <span class="attach-error">(companion/projector file - not directly usable as a main model)</span>` : "";
+      const sizeGb = m.fit && m.fit.file_bytes ? (m.fit.file_bytes / 1e9).toFixed(1) + "GB" : "";
+      const fitBadge = m.fit ? (FIT_BADGE[m.fit.verdict] || "") : "";
+      const speedBadge = m.fit && m.fit.speed_estimate ? (SPEED_BADGE[m.fit.speed_estimate] || "") : "";
+      const speedTitle = m.fit && m.fit.speed_reason ? escapeHtml(m.fit.speed_reason) : "";
+      const needsOverride = m.is_companion || (m.fit && (m.fit.verdict === "too_heavy" || m.fit.verdict === "risky"));
+      const btnLabel = needsOverride ? "Use anyway ⚠️" : "Use this";
+      return `
+        <div class="import-candidate" style="${isSelected ? 'border-color: var(--accent);' : ''}">
+          <div>
+            <div class="skill-name">${escapeHtml(m.label)}${isSelected ? ' ✓' : ''} <span class="field-hint" style="display:inline;">${sizeGb}</span></div>
+            <div class="skill-desc">${sourceTag}${companionNote}</div>
+            <div class="skill-desc" style="margin-top:2px;" title="${m.fit ? escapeHtml(m.fit.reason) : ''}">${fitBadge}</div>
+            <div class="skill-desc" style="margin-top:2px;" title="${speedTitle}">${speedBadge}</div>
+          </div>
+          ${isSelected ? '' : `<button onclick="selectLocalModelUI('${escapeHtml(m.path).replace(/'/g, "\\'")}')">${btnLabel}</button>`}
+        </div>`;
+    }).join("");
+    hint.textContent = `Folders checked: ${settings.local_model_dir} (drop files here) and ${settings.lmstudio_model_dir} (LM Studio's own downloads, checked automatically).`;
+  } else {
+    list.innerHTML = "";
+    hint.textContent = `No .gguf files found. Drop one in ${settings.local_model_dir}, or download one via LM Studio (${settings.lmstudio_model_dir} is checked automatically).`;
+  }
+  onBackendChoiceChange();
+}
+
+async function selectLocalModelUI(path) {
+  const status = document.getElementById("backendSaveStatus");
+  status.textContent = await window.pywebview.api.select_local_model(path);
+  await loadBackendSettings();
+  setTimeout(() => { status.textContent = ""; }, 3000);
+}
+
+async function pickLocalModelFileUI() {
+  const status = document.getElementById("localModelPickStatus");
+  const result = await window.pywebview.api.pick_local_model_file();
+  if (!result) return;  // dialog cancelled
+  status.textContent = result;  // set_selected_local_model's own real status/error message
+  await loadBackendSettings();
+  setTimeout(() => { status.textContent = ""; }, 5000);
+}
+
+async function unloadLocalModelUI() {
+  const status = document.getElementById("unloadLocalModelStatus");
+  status.textContent = await window.pywebview.api.unload_local_model();
+  await loadBackendSettings();
+  setTimeout(() => { status.textContent = ""; }, 4000);
+}
+
+function onBackendChoiceChange() {
+  const backend = document.querySelector('input[name="backendChoice"]:checked').value;
+  document.getElementById("remoteEndpointField").style.opacity = backend === "remote" ? "1" : "0.4";
+  document.getElementById("remoteEndpointInput").disabled = backend !== "remote";
+}
+
+function onSubagentEnabledChange() {
+  const enabled = document.getElementById("subagentEnabledCheckbox").checked;
+  document.getElementById("subagentFields").style.opacity = enabled ? "1" : "0.4";
+  document.getElementById("subagentEndpointInput").disabled = !enabled;
+  document.getElementById("subagentModelInput").disabled = !enabled;
+}
+
+async function saveBackendSettings() {
+  const backend = document.querySelector('input[name="backendChoice"]:checked').value;
+  const endpoint = document.getElementById("remoteEndpointInput").value.trim();
+  const subagentEnabled = document.getElementById("subagentEnabledCheckbox").checked;
+  const subagentEndpoint = document.getElementById("subagentEndpointInput").value.trim();
+  const subagentModel = document.getElementById("subagentModelInput").value.trim();
+  const status = document.getElementById("backendSaveStatus");
+  const result = await window.pywebview.api.save_backend_settings(backend, endpoint, subagentEnabled, subagentEndpoint, subagentModel);
+  status.textContent = result;
+  await loadModels();
+  setTimeout(() => { status.textContent = ""; }, 3000);
+}
+
+async function saveSystemPrompt() {
+  const box = document.getElementById("systemPromptBox");
+  const status = document.getElementById("promptSaveStatus");
+  await window.pywebview.api.save_system_prompt(box.value);
+  status.textContent = "Saved.";
+  setTimeout(() => { status.textContent = ""; }, 1500);
+}
+
+async function resetSystemPromptToDefault() {
+  await window.pywebview.api.reset_system_prompt();
+  const box = document.getElementById("systemPromptBox");
+  box.value = await window.pywebview.api.get_system_prompt();
+  const status = document.getElementById("promptSaveStatus");
+  status.textContent = "Reset.";
+  setTimeout(() => { status.textContent = ""; }, 1500);
+}
+
+// --- Skills ---
+async function renderInstalledSkills() {
+  const skills = await window.pywebview.api.list_skills();
+  const list = document.getElementById("installedSkillsList");
+  if (!skills.length) {
+    list.innerHTML = `<div class="skills-empty">No skills installed yet.</div>`;
+    return;
+  }
+  list.innerHTML = skills.map((s) => {
+    let modeLine;
+    if (s.mode === "semantic") modeLine = "matches by meaning (semantic) - no fixed trigger words";
+    else if (s.mode === "manual") modeLine = "manual only - use the 🎯 button in chat to run it";
+    else modeLine = `triggers: ${s.triggers.map(escapeHtml).join(", ")}`;
+    return `
+    <div class="skill-card">
+      <div class="skill-card-top">
+        <span class="skill-name">${escapeHtml(s.name)}</span>
+        <span class="remove" onclick="deleteSkillUI('${escapeHtml(s.name)}')">✕</span>
+      </div>
+      <div class="skill-desc">${escapeHtml(s.description || "")}</div>
+      <div class="skill-triggers">${modeLine}</div>
+    </div>
+  `;
+  }).join("");
+}
+
+async function deleteSkillUI(name) {
+  await window.pywebview.api.delete_skill(name);
+  await renderInstalledSkills();
+}
+
+function flashSkillsStatus(text) {
+  const status = document.getElementById("skillsStatus");
+  status.textContent = text;
+  setTimeout(() => { status.textContent = ""; }, 3000);
+}
+
+async function pickSkillFileUI() {
+  const result = await window.pywebview.api.pick_skill_file();
+  if (!result) return;  // cancelled
+  flashSkillsStatus(result);
+  await renderInstalledSkills();
+}
+
+async function scanForImportableSkills() {
+  const candidates = await window.pywebview.api.find_importable_skills();
+  const box = document.getElementById("skillScanResults");
+  if (!candidates.length) {
+    box.innerHTML = `<div class="skills-empty" style="margin-top:8px;">No new importable skills found on this device.</div>`;
+    return;
+  }
+  window.__skillImportCandidates = candidates;
+  box.innerHTML = candidates.map((c, i) => `
+    <div class="import-candidate">
+      <div>
+        <div class="skill-name">${escapeHtml(c.name)}</div>
+        <div class="skill-desc">${escapeHtml(c.description || "")}</div>
+      </div>
+      <button onclick="openImportForm(${i})">Import</button>
+    </div>
+  `).join("");
+}
+
+async function openImportForm(index) {
+  const c = window.__skillImportCandidates[index];
+  const suggested = await window.pywebview.api.suggest_triggers(c.description || "");
+  const triggersValue = suggested.length ? suggested.join(", ") : c.name.replace(/[-_]/g, " ");
+  const triggersHint = suggested.length
+    ? "suggested from the skill's own description - review before saving"
+    : "no example phrases could be found in the description - write your own, or pick Semantic/Manual instead";
+  document.getElementById("skillImportForm").innerHTML = `
+    <div class="skill-card" style="margin-top:10px;">
+      <div class="field-label">How should "${escapeHtml(c.name)}" activate?</div>
+      <div class="settings-radio-row">
+        <label><input type="radio" name="importMode" value="keyword" checked onchange="onImportModeChange()"> Keyword - fires on exact trigger phrases</label>
+        <label><input type="radio" name="importMode" value="semantic" onchange="onImportModeChange()"> Semantic - fires when a message means the same thing, no triggers needed</label>
+        <label><input type="radio" name="importMode" value="manual" onchange="onImportModeChange()"> Manual only - never auto-fires, run it explicitly from chat (🎯 button)</label>
+      </div>
+      <div id="importTriggersRow" style="margin-top:10px;">
+        <div class="field-label">Triggers (comma-separated) - ${triggersHint}</div>
+        <input type="text" id="importTriggersInput" class="settings-input" value="${escapeHtml(triggersValue)}">
+      </div>
+      <div class="settings-btn-row">
+        <button class="settings-save-btn" onclick="confirmImportSkill(${index})">Confirm import</button>
+        <button onclick="document.getElementById('skillImportForm').innerHTML=''">Cancel</button>
+      </div>
+    </div>
+  `;
+}
+
+function onImportModeChange() {
+  const mode = document.querySelector('input[name="importMode"]:checked').value;
+  document.getElementById("importTriggersRow").style.display = (mode === "keyword") ? "" : "none";
+}
+
+async function confirmImportSkill(index) {
+  const c = window.__skillImportCandidates[index];
+  const mode = document.querySelector('input[name="importMode"]:checked').value;
+  const triggers = mode === "keyword"
+    ? document.getElementById("importTriggersInput").value.split(",").map((t) => t.trim()).filter(Boolean)
+    : [];
+  const result = await window.pywebview.api.import_skill(c.name, c.description, triggers, c.body, mode);
+  flashSkillsStatus(result);
+  document.getElementById("skillImportForm").innerHTML = "";
+  document.getElementById("skillScanResults").innerHTML = "";
+  await renderInstalledSkills();
+}
+</script>
+</body>
+</html>
