@@ -61,11 +61,14 @@ There's no fixed minimum - it depends entirely on which backend you use:
 
 ## Setup
 
-Requires Python 3.10+. Install the dependencies your setup actually needs -
-at minimum `pywebview` for the GUI; add `llama-cpp-python` for the local
-backend, `sentence-transformers` for semantic skill matching, and the voice
-stack (`faster-whisper`, `torch`, `sounddevice`, `soundfile`, `f5-tts`) only
-if you want voice.
+Requires Python 3.10+. `requirements.txt` is tiered - the only uncommented
+line is `pywebview` (needed for the GUI; the terminal client needs nothing
+beyond stdlib at all). Uncomment the lines for whichever of the local
+backend / semantic skill matching / voice you actually want, then:
+
+```
+pip install -r requirements.txt
+```
 
 Then either:
 - **GUI**: `python case_gui_web.py` (Windows: `launch_case.vbs` starts it

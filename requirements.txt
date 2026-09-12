@@ -1,0 +1,20 @@
+# CASE's dependencies are tiered - install only what you actually need.
+# See README.md's "Hardware requirements" section for why.
+
+# --- Core (needed for the GUI) ---
+# case_cli.py (the terminal client) needs NONE of this - it's pure stdlib.
+pywebview>=6.2
+
+# --- Optional: local backend (a .gguf model file, no server) ---
+# llama-cpp-python>=0.3.35
+
+# --- Optional: semantic skill matching (Settings > Skills, "Semantic" mode) ---
+# sentence-transformers>=5.6
+# numpy>=2.5
+
+# --- Optional: voice input/output (Settings > Voice) ---
+# faster-whisper
+# torch>=2.12
+# sounddevice
+# soundfile
+# f5-tts
