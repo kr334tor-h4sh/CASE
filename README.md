@@ -10,6 +10,15 @@ loaded directly via `llama-cpp-python` — no server required either way.
 **Status: work in progress.** This is a personal project shared as-is. Expect
 rough edges, incomplete platform support, and breaking changes without notice.
 
+|                                                    |                                                                  |
+| -------------------------------------------------- | ---------------------------------------------------------------- |
+| ![Chat](screenshots/chat.png)                       | ![Settings > Agent](screenshots/settings_agent.png)               |
+| Chat, with a collapsible reasoning block             | Settings > Agent - personalize the system prompt                  |
+| ![Settings > Skills](screenshots/settings_skills.png) |                                                                  |
+| Settings > Skills - the 3 example skills, one per matching mode | |
+
+(Sample conversation shown for illustration - not a real chat log.)
+
 ## What's here
 
 - `case_gui_web.py` / `case_gui_web.html` — the desktop GUI (pywebview):
