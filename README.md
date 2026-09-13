@@ -14,8 +14,8 @@ rough edges, incomplete platform support, and breaking changes without notice.
 | -------------------------------------------------- | ---------------------------------------------------------------- |
 | ![Chat](screenshots/chat.png)                       | ![Settings > Agent](screenshots/settings_agent.png)               |
 | Chat, with a collapsible reasoning block             | Settings > Agent - personalize the system prompt                  |
-| ![Settings > Skills](screenshots/settings_skills.png) |                                                                  |
-| Settings > Skills - the 3 example skills, one per matching mode | |
+| ![Settings > Skills](screenshots/settings_skills.png) | ![Settings > Local Models](screenshots/settings_localmodels.png)  |
+| Settings > Skills - the 3 example skills, one per matching mode | Settings > Local Models - GPU detection + a per-file fit/speed check |
 
 (Sample conversation shown for illustration - not a real chat log.)
 
