@@ -42,6 +42,7 @@ import webview
 
 import case_agent
 import case_browser
+import case_browser_panel
 import case_sessions
 import case_skills
 import case_tools
@@ -568,6 +569,59 @@ class Api:
             pairs.append({"user": text, "assistant": result["answer"], "reasoning": result["reasoning"]})
         return pairs
 
+    # --- Browser panel inside this window (see case_browser_panel.py). Thin
+    # pass-throughs: the JS side polls panel_frame and forwards clicks/keys.
+    def panel_available(self) -> bool:
+        return case_browser_panel.available()
+
+    def panel_frame(self, last_hash: str = "") -> dict:
+        return case_browser_panel.frame(last_hash)
+
+    def panel_poll(self) -> dict:
+        return case_browser_panel.poll()
+
+    def panel_set_viewport(self, width, height) -> dict:
+        return case_browser_panel.set_viewport(width, height)
+
+    def panel_click(self, x, y, button="left", clicks=1) -> dict:
+        return case_browser_panel.click(x, y, button, clicks)
+
+    def panel_scroll(self, x, y, dx, dy) -> dict:
+        return case_browser_panel.scroll(x, y, dx, dy)
+
+    def panel_key(self, key_name, ctrl=False, shift=False, alt=False) -> dict:
+        return case_browser_panel.key(key_name, ctrl, shift, alt)
+
+    def panel_insert_text(self, text) -> dict:
+        return case_browser_panel.insert_text(text)
+
+    def panel_navigate(self, text) -> dict:
+        return case_browser_panel.navigate(text)
+
+    def panel_history(self, step) -> dict:
+        return case_browser_panel.history(step)
+
+    def panel_reload(self) -> dict:
+        return case_browser_panel.reload()
+
+    def panel_new_tab(self, url="") -> dict:
+        return case_browser_panel.new_tab(url)
+
+    def panel_switch_tab(self, tab_id) -> dict:
+        return case_browser_panel.switch_tab(tab_id)
+
+    def panel_close_tab(self, tab_id) -> dict:
+        return case_browser_panel.close_tab(tab_id)
+
+    def panel_ensure_width(self, min_width) -> None:
+        """Widen the CASE window so the panel has room beside the chat."""
+        try:
+            win = self._window
+            if win.width < min_width:
+                win.resize(int(min_width), win.height)
+        except Exception:
+            pass
+
     def open_browser(self, url: str) -> str:
         result = case_browser.open_browser_window(url)
         # Same reasoning as case_gui.py's button: log a note into history so
@@ -589,6 +643,10 @@ def main():
     if not _acquire_single_instance_lock():
         _focus_existing_window()
         return
+
+    # The browser lives in the panel inside this window - run it headless so
+    # it never opens a window of its own.
+    case_browser.EMBEDDED = True
 
     api = Api()
     window = webview.create_window(

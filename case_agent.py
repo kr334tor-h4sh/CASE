@@ -587,6 +587,44 @@ def spin_off_subagent(task: str) -> str:
     return "(subagent stopped after too many tool calls - narrow the task and try again)"
 
 
+PROMPT_BUDGET_FRACTION = 0.7  # of the loaded context window; the rest is room for the reply
+_OLD_RESULT_KEEP_CHARS = 400
+# Measured live 2026-10-01 on Qwen3.5 with web-page text: ~2.6 characters per
+# token (15.4K real tokens from ~40K characters), so 3.5 let the prompt overshoot.
+CHARS_PER_TOKEN = 2.5
+
+
+def _shrink_to_budget(messages: list) -> None:
+    """Local backend only: keep the prompt under ~70% of the loaded context
+    window by cutting the OLDEST tool results down to a short stub, in
+    place. Found live 2026-10-01: one 'macro update' fired ~20 searches and
+    page loads across several rounds, the accumulated tool output reached
+    19K tokens against a 16K window, and the whole turn died with "Requested
+    tokens exceed context window" instead of answering. The newest tool
+    results are what the model is about to read, so they are shrunk last
+    (and not at all if the older ones are enough). Rough estimate: see
+    CHARS_PER_TOKEN. Does nothing when the window size isn't known
+    (remote backend, or a model loaded at its native, unreported context)."""
+    if get_backend() != "local":
+        return
+    import case_local_llm  # lazy, like _call_model: keeps llama-cpp-python off the import path until needed
+    n_ctx = case_local_llm.get_load_info().get("n_ctx")
+    if not n_ctx:
+        return
+    budget_chars = int(n_ctx * PROMPT_BUDGET_FRACTION * CHARS_PER_TOKEN)
+
+    def total() -> int:
+        return sum(len(str(m.get("content") or "")) for m in messages)
+
+    for m in messages:  # oldest first
+        if total() <= budget_chars:
+            return
+        text = str(m.get("content") or "")
+        if m.get("role") == "tool" and len(text) > _OLD_RESULT_KEEP_CHARS * 2:
+            m["content"] = (text[:_OLD_RESULT_KEEP_CHARS]
+                            + "\n[... older tool result shortened to save context space ...]")
+
+
 def ask(question: str, history: list, allow_write: bool = False, confirm_callback=None, model: str = MODEL, forced_skill_names: list = None) -> str:
     """Send `question`, run any tool calls the model requests, return the
     final text answer. Mutates `history` in place with the full exchange
@@ -661,6 +699,7 @@ def ask(question: str, history: list, allow_write: bool = False, confirm_callbac
         messages = history + turn_messages
 
     for _ in range(MAX_TOOL_ITERATIONS):
+        _shrink_to_budget(messages)
         response = _call_model(messages, tools, model=model)
         choice = response["choices"][0]
         msg = choice["message"]

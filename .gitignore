@@ -35,3 +35,6 @@ test_file.txt
 
 # Personal utility script unrelated to CASE itself
 backup_reminder.ps1
+
+# Dedicated browser profile for the tabbed CASE browser (personal)
+browser_profile/

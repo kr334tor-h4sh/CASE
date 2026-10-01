@@ -18,3 +18,6 @@ pywebview>=6.2
 # sounddevice
 # soundfile
 # f5-tts
+
+# --- Optional: youtube_transcript tool (youtube-video-info skill) ---
+# youtube-transcript-api

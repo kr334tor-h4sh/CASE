@@ -18,6 +18,7 @@ from pathlib import Path
 
 from case_web_search import web_search
 from case_browser import browse_url, open_browser_window
+from case_fetch import fetch_url, youtube_transcript
 
 # When set, list_directory/read_file/search_files/memory_reflect proxy over
 # HTTP to case_file_server.py running on whichever machine actually has the
@@ -422,6 +423,36 @@ TOOL_SCHEMAS = [
             },
         },
     },
+    {
+        "type": "function",
+        "function": {
+            "name": "fetch_url",
+            "description": "Fetch a URL with a plain HTTP GET and return its readable text - NO browser window opens. Works for static pages, articles, RSS feeds and JSON APIs (e.g. SEC EDGAR). Returns up to 20,000 characters per call; if the result says TRUNCATED, call again with offset set to the number it gives. It cannot run JavaScript: if the text comes back empty or just navigation boilerplate, the site renders client-side - use browse_url for it instead. Prefer this over browse_url whenever the page is static, because it is faster and does not pop a window.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "url": {"type": "string"},
+                    "offset": {"type": "integer", "description": "Character position to start from, for reading the next part of a long page. Default 0."},
+                },
+                "required": ["url"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "youtube_transcript",
+            "description": "Get the spoken transcript of ONE specific YouTube video from its link (or 11-character id), plus its title. Returns up to 20,000 characters per call; if TRUNCATED, call again with offset. Not for channel/playlist episode lists - those need browse_url. If it reports no transcript, say so plainly rather than guessing the video's content.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "url": {"type": "string"},
+                    "offset": {"type": "integer", "description": "Character position to start from. Default 0."},
+                },
+                "required": ["url"],
+            },
+        },
+    },
 ]
 
 TOOL_FUNCTIONS = {
@@ -432,4 +463,6 @@ TOOL_FUNCTIONS = {
     "web_search": web_search,
     "browse_url": browse_url,
     "open_browser_window": open_browser_window,
+    "fetch_url": fetch_url,
+    "youtube_transcript": youtube_transcript,
 }

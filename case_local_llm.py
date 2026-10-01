@@ -72,21 +72,46 @@ import case_hardware
 _TOOL_CALL_RE = re.compile(r"<tool_call>\s*(\{.*?\})\s*</tool_call>", re.DOTALL)
 
 
-def _parse_raw_tool_calls(content: str):
-    """Real, narrow parser for the <tool_call>{json}</tool_call> format.
-    Returns (remaining_content, tool_calls_list) - tool_calls_list is
-    empty if no valid <tool_call> block was found (the normal case for
-    any model that isn't trying to call a tool), in which case
-    remaining_content is the original text, untouched. A block whose JSON
-    fails to parse, or is missing "name", is skipped rather than crashing
-    the whole response - one malformed call shouldn't take down a
-    response that might have other valid content."""
-    matches = list(_TOOL_CALL_RE.finditer(content))
-    if not matches:
-        return content, []
+# Second tag convention, confirmed live 2026-10-01 with Qwen3.5-9B: XML-ish
+# instead of JSON. Its calls came back as the visible ANSWER text and never
+# ran, because the JSON-only parser below didn't recognise them:
+#   <tool_call>
+#   <function=web_search>
+#   <parameter=query>
+#   Bitcoin price today
+#   </parameter>
+#   </function>
+#   </tool_call>
+_XML_CALL_RE = re.compile(r"<tool_call>\s*<function=([^>\s]+)>(.*?)</function>\s*</tool_call>", re.DOTALL)
+_XML_PARAM_RE = re.compile(r"<parameter=([^>\s]+)>\s*(.*?)\s*</parameter>", re.DOTALL)
 
+
+def _coerce_xml_value(raw: str):
+    """XML parameters are all text. Keep strings as strings, but turn a
+    value that is clearly a JSON number/bool/object back into one so a
+    tool taking an integer (e.g. offset) receives an integer."""
+    stripped = raw.strip()
+    if stripped and (stripped[0] in "{[" or stripped in ("true", "false", "null") or re.fullmatch(r"-?\d+(\.\d+)?", stripped)):
+        try:
+            return json.loads(stripped)
+        except ValueError:
+            pass
+    return stripped
+
+
+def _parse_raw_tool_calls(content: str):
+    """Real, narrow parser for the two raw tool-call tag formats seen so
+    far: <tool_call>{json}</tool_call> (Qwen2.5/Hermes) and the XML-style
+    <tool_call><function=name><parameter=k>v</parameter></function></tool_call>
+    (Qwen3.5). Returns (remaining_content, tool_calls_list) - the list is
+    empty if no valid block was found (the normal case for any model that
+    isn't trying to call a tool), in which case remaining_content is the
+    original text, untouched. A block that fails to parse, or lacks a
+    name, is skipped rather than crashing the whole response - one
+    malformed call shouldn't take down a response that might have other
+    valid content."""
     tool_calls = []
-    for i, m in enumerate(matches):
+    for m in _TOOL_CALL_RE.finditer(content):
         try:
             data = json.loads(m.group(1))
             name = data["name"]
@@ -107,9 +132,16 @@ def _parse_raw_tool_calls(content: str):
         raw_args = data.get("arguments")
         args_json = raw_args if isinstance(raw_args, str) else json.dumps(raw_args or {})
         tool_calls.append({
-            "id": f"call_{i}",
+            "id": f"call_{len(tool_calls)}",
             "type": "function",
             "function": {"name": name, "arguments": args_json},
+        })
+    for m in _XML_CALL_RE.finditer(content):
+        args = {k: _coerce_xml_value(v) for k, v in _XML_PARAM_RE.findall(m.group(2))}
+        tool_calls.append({
+            "id": f"call_{len(tool_calls)}",
+            "type": "function",
+            "function": {"name": m.group(1), "arguments": json.dumps(args)},
         })
 
     if not tool_calls:
@@ -118,7 +150,7 @@ def _parse_raw_tool_calls(content: str):
     # Whatever text isn't inside a <tool_call> block (a lead-in sentence,
     # or nothing at all) - real OpenAI-shaped responses carry empty/None
     # content alongside tool_calls, not the raw tag soup.
-    remaining = _TOOL_CALL_RE.sub("", content).strip()
+    remaining = _XML_CALL_RE.sub("", _TOOL_CALL_RE.sub("", content)).strip()
     return remaining, tool_calls
 
 # One model kept loaded at a time, keyed by path - switching to a different
@@ -265,18 +297,22 @@ def _get_llm(model_path: str):
         # context first (paired with every GPU-offload option) before
         # shrinking context at all - a real memory-pressure back-off, not
         # a guess at the "right" number for any given model/machine.
-        for n_ctx in _N_CTX_ATTEMPTS:
-            for n_gpu_layers in gpu_attempts:
-                try:
-                    llm = Llama(model_path=model_path, n_ctx=n_ctx, n_gpu_layers=n_gpu_layers, verbose=False)
-                    used_n_gpu_layers = n_gpu_layers
-                    used_n_ctx = n_ctx
-                    break
-                except Exception as e:
-                    last_error = e
-                    continue
-            if llm is not None:
+        # GPU options OUTER, context INNER (changed 2026-10-01): with context
+        # outer, a model whose native context is huge (Qwen3.5-9B) failed
+        # every GPU attempt at n_ctx=0, then succeeded CPU-only at n_ctx=0 -
+        # silently ~50x slower (one answer took 30 minutes). Exhaust the
+        # smaller contexts on the GPU before ever falling back to CPU.
+        attempts = [(c, g) for g in gpu_attempts if g != 0 for c in _N_CTX_ATTEMPTS]
+        attempts += [(c, 0) for c in _N_CTX_ATTEMPTS]
+        for n_ctx, n_gpu_layers in attempts:
+            try:
+                llm = Llama(model_path=model_path, n_ctx=n_ctx, n_gpu_layers=n_gpu_layers, verbose=False)
+                used_n_gpu_layers = n_gpu_layers
+                used_n_ctx = n_ctx
                 break
+            except Exception as e:
+                last_error = e
+                continue
         if llm is None:
             raise RuntimeError(f"Failed to load local model {model_path}: {last_error}") from last_error
 
@@ -288,6 +324,31 @@ def _get_llm(model_path: str):
     return _loaded["llm"]
 
 
+def _arguments_as_dicts(messages: list) -> list:
+    """OpenAI wire format carries tool_calls[].function.arguments as a JSON
+    STRING, but local chat templates iterate it as a mapping (Qwen3.5's does
+    `arguments|items`, which crashed live 2026-10-01 with "Can only get item
+    pairs from a mapping"). Return a copy with those strings parsed to dicts;
+    Qwen2.5-style templates (`arguments|tojson`) accept a dict too."""
+    fixed = []
+    for m in messages:
+        calls = m.get("tool_calls") if isinstance(m, dict) else None
+        if calls:
+            new_calls = []
+            for c in calls:
+                fn = dict(c.get("function", {}))
+                if isinstance(fn.get("arguments"), str):
+                    try:
+                        parsed = json.loads(fn["arguments"] or "{}")
+                        fn["arguments"] = parsed if isinstance(parsed, dict) else {}
+                    except ValueError:
+                        fn["arguments"] = {}
+                new_calls.append({**c, "function": fn})
+            m = {**m, "tool_calls": new_calls}
+        fixed.append(m)
+    return fixed
+
+
 def chat_completion(messages: list, tools: list, model_path: str) -> dict:
     """Returns an OpenAI-chat-completion-shaped dict (choices[0].message...)
     so case_agent._call_model()'s caller doesn't need to know which backend
@@ -297,6 +358,7 @@ def chat_completion(messages: list, tools: list, model_path: str) -> dict:
     that ignores `tools` just answers in plain text, which case_agent.py's
     tool-calling loop already treats as a final answer with no tool_calls)."""
     llm = _get_llm(model_path)
+    messages = _arguments_as_dicts(messages)
     kwargs = {"messages": messages, "temperature": 0.3, "max_tokens": 1200}
     if tools:
         kwargs["tools"] = tools

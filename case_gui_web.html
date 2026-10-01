@@ -274,6 +274,27 @@
 
   ::-webkit-scrollbar { width: 8px; }
   ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+
+  /* Browser panel - a live view of a real browser tab (case_browser_panel.py) */
+  #browserPanel { width: 560px; min-width: 280px; flex-shrink: 0; display: flex; flex-direction: column;
+    background: var(--bg-input); border-left: 1px solid var(--border); height: 100vh; }
+  #browserPanel[hidden], #browserDivider[hidden] { display: none; }
+  #browserDivider { width: 5px; cursor: col-resize; flex-shrink: 0; background: transparent; }
+  #browserDivider:hover, #browserDivider.dragging { background: var(--accent); }
+  #bTabs { display: flex; overflow-x: auto; gap: 2px; padding: 4px 4px 0; flex-shrink: 0; }
+  .bTab { display: flex; align-items: center; gap: 6px; max-width: 160px; padding: 5px 8px; font-size: 12px;
+    background: var(--bg); border: 1px solid var(--border); border-bottom: none; border-radius: 6px 6px 0 0;
+    cursor: pointer; white-space: nowrap; color: var(--fg); opacity: .7; }
+  .bTab.active { opacity: 1; border-color: var(--accent); }
+  .bTab .t { overflow: hidden; text-overflow: ellipsis; }
+  .bTab .x { opacity: .6; } .bTab .x:hover { opacity: 1; }
+  #bBar { display: flex; align-items: center; gap: 4px; padding: 6px; flex-shrink: 0; }
+  #bAddr { flex: 1; min-width: 0; background: var(--bg); color: var(--fg); border: 1px solid var(--border);
+    border-radius: 6px; padding: 5px 8px; font-size: 13px; }
+  #bView { flex: 1; position: relative; overflow: hidden; background: #fff; outline: none; cursor: default; }
+  #bView:focus { box-shadow: inset 0 0 0 2px var(--accent); }
+  #bFrame { position: absolute; left: 0; top: 0; width: 100%; height: 100%; object-fit: fill; user-select: none; }
+  #bMsg { position: absolute; left: 0; right: 0; top: 40%; text-align: center; color: #555; font-size: 13px; padding: 0 20px; }
 </style>
 </head>
 <body>
@@ -318,6 +339,23 @@
       <div id="skillPickPopover" hidden></div>
       <textarea id="entry" placeholder="Message CASE..." rows="1"></textarea>
       <button id="sendBtn" onclick="send()">Send</button>
+    </div>
+  </div>
+
+  <div id="browserDivider" hidden></div>
+  <div id="browserPanel" hidden>
+    <div id="bTabs"></div>
+    <div id="bBar">
+      <button class="icon-btn small" onclick="bHistory(-1)" title="Back">◀</button>
+      <button class="icon-btn small" onclick="bHistory(1)" title="Forward">▶</button>
+      <button class="icon-btn small" onclick="bReload()" title="Reload">⟳</button>
+      <input id="bAddr" type="text" placeholder="Search or enter address" spellcheck="false">
+      <button class="icon-btn small" onclick="bNewTab()" title="New tab">+</button>
+      <button class="icon-btn small" onclick="hideBrowserPanel()" title="Close panel (the browser keeps running)">✕</button>
+    </div>
+    <div id="bView" tabindex="0">
+      <img id="bFrame" draggable="false" alt="">
+      <div id="bMsg"></div>
     </div>
   </div>
 </div>
@@ -484,9 +522,157 @@ async function send() {
 }
 
 async function openBrowser() {
+  // Preferred: the browser panel inside this window. Falls back to the old
+  // standalone window only if no Edge/Chrome is installed.
+  if (await window.pywebview.api.panel_available()) {
+    showBrowserPanel();
+    return;
+  }
   const result = await window.pywebview.api.open_browser("");
   appendMessage(null, "system", "[Browser] " + result);
 }
+
+// ---- Browser panel: screenshots of a real tab + forwarded input ----
+let bShown = false, bHash = "", bBusy = false, bTimer = null, bSeq = null, bResizeT = null, bWheel = {dx: 0, dy: 0, x: 0, y: 0, t: null};
+const bApi = () => window.pywebview.api;
+
+function showBrowserPanel() {
+  document.getElementById("browserPanel").hidden = false;
+  document.getElementById("browserDivider").hidden = false;
+  if (bShown) return;
+  bShown = true;
+  bApi().panel_ensure_width(1280);
+  bSyncViewport();
+  bHash = "";
+  bTimer = setInterval(bTick, 400);
+  bTick();
+}
+
+function hideBrowserPanel() {
+  bShown = false;
+  clearInterval(bTimer);
+  document.getElementById("browserPanel").hidden = true;
+  document.getElementById("browserDivider").hidden = true;
+}
+
+function bSyncViewport() {
+  const v = document.getElementById("bView");
+  if (!v.clientWidth) return;
+  bApi().panel_set_viewport(v.clientWidth, v.clientHeight).then(() => { bHash = ""; });
+}
+
+async function bTick() {
+  if (bBusy || !bShown) return;
+  bBusy = true;
+  try {
+    const f = await bApi().panel_frame(bHash);
+    const msg = document.getElementById("bMsg");
+    if (f.error) { msg.textContent = f.error; return; }
+    msg.textContent = "";
+    if (f.switched) bHash = "";
+    if (f.img) { document.getElementById("bFrame").src = f.img; }
+    bHash = f.hash;
+    const addr = document.getElementById("bAddr");
+    if (document.activeElement !== addr) addr.value = (f.url || "").startsWith("about:blank") ? "" : f.url;
+    renderBTabs(f.tabs || []);
+  } catch (e) {
+    document.getElementById("bMsg").textContent = "Browser panel error: " + e;
+  } finally {
+    bBusy = false;
+  }
+}
+
+function renderBTabs(tabs) {
+  const box = document.getElementById("bTabs");
+  const sig = JSON.stringify(tabs.map(t => [t.id, t.title, t.active]));
+  if (box.dataset.sig === sig) return;
+  box.dataset.sig = sig;
+  box.innerHTML = "";
+  for (const t of tabs) {
+    const el = document.createElement("div");
+    el.className = "bTab" + (t.active ? " active" : "");
+    el.title = t.url;
+    const label = document.createElement("span"); label.className = "t"; label.textContent = t.title;
+    const x = document.createElement("span"); x.className = "x"; x.textContent = "✕";
+    x.onclick = async (ev) => { ev.stopPropagation(); await bApi().panel_close_tab(t.id); bHash = ""; bTick(); };
+    el.onclick = async () => { await bApi().panel_switch_tab(t.id); bHash = ""; bTick(); };
+    el.append(label, x);
+    box.appendChild(el);
+  }
+}
+
+async function bHistory(step) { await bApi().panel_history(step); bHash = ""; }
+async function bReload() { await bApi().panel_reload(); bHash = ""; }
+async function bNewTab() { await bApi().panel_new_tab(""); bHash = ""; bTick(); const a = document.getElementById("bAddr"); a.value = ""; a.focus(); }
+
+function bPos(e) {
+  const r = document.getElementById("bView").getBoundingClientRect();
+  return {x: Math.round(e.clientX - r.left), y: Math.round(e.clientY - r.top)};
+}
+
+(function wireBrowserPanel() {
+  const view = document.getElementById("bView");
+  const addr = document.getElementById("bAddr");
+  addr.addEventListener("keydown", async (e) => {
+    if (e.key !== "Enter") return;
+    await bApi().panel_navigate(addr.value);
+    bHash = ""; view.focus();
+  });
+  new ResizeObserver(() => { clearTimeout(bResizeT); bResizeT = setTimeout(bSyncViewport, 200); }).observe(view);
+
+  view.addEventListener("click", (e) => {
+    view.focus();
+    const p = bPos(e);
+    bApi().panel_click(p.x, p.y, "left", e.detail || 1).then(() => { bHash = ""; });
+  });
+  view.addEventListener("contextmenu", (e) => e.preventDefault());
+  view.addEventListener("wheel", (e) => {
+    e.preventDefault();
+    const p = bPos(e);
+    bWheel.dx += e.deltaX; bWheel.dy += e.deltaY; bWheel.x = p.x; bWheel.y = p.y;
+    if (bWheel.t) return;
+    bWheel.t = setTimeout(() => {   // batch wheel ticks so a fast scroll is a few calls, not dozens
+      const w = bWheel; bWheel = {dx: 0, dy: 0, x: w.x, y: w.y, t: null};
+      bApi().panel_scroll(w.x, w.y, w.dx, w.dy);
+    }, 60);
+  }, {passive: false});
+  view.addEventListener("keydown", (e) => {
+    if (["Shift", "Control", "Alt", "Meta", "CapsLock", "AltGraph"].includes(e.key)) return;
+    if (e.ctrlKey && e.key.toLowerCase() === "v") return;   // handled by the paste event below
+    const special = ["Enter", "Backspace", "Tab", "Escape", "Delete", "ArrowLeft", "ArrowUp", "ArrowRight", "ArrowDown", "Home", "End", "PageUp", "PageDown"];
+    if (e.key.length !== 1 && !special.includes(e.key)) return;
+    if (e.ctrlKey && !"acxzy".includes(e.key.toLowerCase())) return;
+    e.preventDefault();
+    bApi().panel_key(e.key, e.ctrlKey, e.shiftKey, e.altKey).then(() => { bHash = ""; });
+  });
+  view.addEventListener("paste", (e) => {
+    e.preventDefault();
+    const text = (e.clipboardData || window.clipboardData).getData("text");
+    if (text) bApi().panel_insert_text(text).then(() => { bHash = ""; });
+  });
+
+  // Drag the divider to resize the panel.
+  const div = document.getElementById("browserDivider"), panel = document.getElementById("browserPanel");
+  div.addEventListener("mousedown", (e) => {
+    e.preventDefault(); div.classList.add("dragging");
+    const move = (m) => { panel.style.width = Math.max(280, Math.min(window.innerWidth - 420, window.innerWidth - m.clientX)) + "px"; };
+    const up = () => { div.classList.remove("dragging"); window.removeEventListener("mousemove", move); window.removeEventListener("mouseup", up); };
+    window.addEventListener("mousemove", move); window.addEventListener("mouseup", up);
+  });
+
+  // When the MODEL uses the browser (browse_url / web_search fallback /
+  // open_browser_window) while the panel is closed, pop it open.
+  setInterval(async () => {
+    if (bShown || !window.pywebview || !window.pywebview.api) return;
+    try {
+      const r = await bApi().panel_poll();
+      if (r && typeof r.agent_seq === "number") {
+        if (bSeq === null) bSeq = r.agent_seq;
+        else if (r.agent_seq > bSeq) { bSeq = r.agent_seq; showBrowserPanel(); }
+      }
+    } catch (e) { /* api not ready yet */ }
+  }, 1000);
+})();
 
 async function toggleModelInfo(e) {
   e.stopPropagation();

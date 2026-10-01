@@ -212,8 +212,8 @@ def _semantic_match(skill: dict, user_text: str, cache: dict) -> bool:
 
 
 def match_skills(user_text: str) -> list:
-    """Skills relevant to this turn, capped at MAX_SKILLS_PER_TURN, checked
-    in file-listing order. Three modes, chosen per-skill at import/creation
+    """Skills relevant to this turn, capped at MAX_SKILLS_PER_TURN: keyword
+    matches first (file-listing order), then semantic matches best score first. Three modes, chosen per-skill at import/creation
     time (frontmatter `mode:`, defaults to keyword):
     - keyword (default, CASE's original approach): a real case-insensitive
       substring match against user_text - cheap, fully deterministic,
@@ -228,8 +228,10 @@ def match_skills(user_text: str) -> list:
       and case_agent.ask()'s forced_skill_names param for how Sati invokes
       one of these explicitly instead."""
     text_lower = user_text.lower()
-    matched = []
+    keyword_hits = []
+    semantic_hits = []  # (score, skill)
     semantic_cache = None
+    user_vec = None
     cache_dirty = False
     for skill in list_skills():
         mode = skill.get("mode", "keyword")
@@ -238,17 +240,25 @@ def match_skills(user_text: str) -> list:
         elif mode == "semantic":
             if semantic_cache is None:
                 semantic_cache = _load_semantic_cache()
-            if _semantic_match(skill, user_text, semantic_cache):
-                matched.append(skill)
+            skill_vec = _get_description_embedding(skill, semantic_cache)
             cache_dirty = True  # _get_description_embedding() may have mutated semantic_cache in-place
+            if user_vec is None:
+                user_vec = _get_embedder().encode(user_text, normalize_embeddings=True).tolist()
+            score = _cosine_similarity(skill_vec, user_vec)
+            if score >= SEMANTIC_MATCH_THRESHOLD:
+                semantic_hits.append((score, skill))
         else:
             if any(trigger.lower() in text_lower for trigger in skill["triggers"]):
-                matched.append(skill)
-        if len(matched) >= MAX_SKILLS_PER_TURN:
-            break
+                keyword_hits.append(skill)
     if cache_dirty and semantic_cache is not None:
         _save_semantic_cache(semantic_cache)
-    return matched
+    # An explicit keyword trigger beats a fuzzy similarity score, and among
+    # semantic hits the best score wins - NOT file-listing order, which let
+    # loosely-worded semantic skills (found 2026-10-01) fill both slots
+    # before a keyword skill that actually named the request was reached.
+    semantic_hits.sort(key=lambda pair: pair[0], reverse=True)
+    matched = keyword_hits + [skill for _, skill in semantic_hits]
+    return matched[:MAX_SKILLS_PER_TURN]
 
 
 def list_manual_skills() -> list:

@@ -33,6 +33,7 @@ from pathlib import Path
 CONFIG_FILE = Path(__file__).parent / "case_config.json"
 REQUEST_TIMEOUT = 15
 MAX_RESULTS = 6
+BROWSER_RESULT_CHARS = 2500  # per search, browser-fallback path only
 
 BRAVE_URL = "https://api.search.brave.com/res/v1/web/search"
 DDG_URL = "https://html.duckduckgo.com/html/"
@@ -165,4 +166,44 @@ def web_search(query: str) -> str:
             return result
         # Brave failed for some reason - fall through to DuckDuckGo silently
 
-    return _duckduckgo_search(query)
+    result = _duckduckgo_search(query)
+    if result.startswith("ERROR"):
+        # Third fallback (2026-10-01): DuckDuckGo's scrape gets rate-limited
+        # fast. CASE has a real browser window, which isn't blocked the way
+        # a bare HTTP scrape is - load a Bing results page in it and return
+        # the page text. Slower and pops a window, so it is last resort only.
+        browsed = _browser_search(query)
+        if browsed is not None:
+            return browsed
+    return result
+
+
+def _browser_search(query: str):
+    """Search by loading a results page in CASE's own browser window and
+    returning its text. Returns None if that also failed, so the caller
+    can fall back to reporting the original error."""
+    try:
+        from case_browser import browse_url
+    except ImportError:
+        return None
+    url = "https://www.bing.com/search?" + urllib.parse.urlencode({"q": query, "setlang": "en-US"})
+    text = browse_url(url)
+    if text.startswith("ERROR") or "text wasn't ready" in text or len(text) < 300:
+        return None
+    # Keep it small: a model often fires 10+ searches in ONE round, and the
+    # raw page (cookie banner, menus, 6000 chars) x 11 overflowed a 16K
+    # context live on 2026-10-01. Drop the consent banner and the tool's own
+    # "Loaded ..." preamble, then keep only the top of the results.
+    marker = "Extracted page text:"
+    if marker in text:
+        text = text.split(marker, 1)[1].strip()
+    skip = text.find("Skip to content")
+    if 0 <= skip < 1500:
+        text = text[skip + len("Skip to content"):].strip()
+    text = text[:BROWSER_RESULT_CHARS]
+    return (
+        f"Web search results for '{query}' (via the CASE browser window, Bing - "
+        f"raw page text, results are the numbered/linked entries near the top; "
+        "ignore menus, ads and 'related searches'):\n\n"
+        f"{text}"
+    )

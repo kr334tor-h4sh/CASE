@@ -35,6 +35,18 @@ rough edges, incomplete platform support, and breaking changes without notice.
   agent loop: tool-calling, file read/write (gated behind a real confirmation
   prompt, with automatic backups and an undo tool), memory search, web
   search, a browser tool, and an optional delegated subagent.
+- `case_fetch.py` — `fetch_url` (plain HTTP text fetch, no window; static
+  pages, RSS, JSON APIs) and `youtube_transcript` (one video's captions;
+  needs the optional `youtube-transcript-api` package).
+- `case_browser.py` / `case_browser_panel.py` — the browser. One dedicated
+  Edge/Chrome instance (own private profile folder, never your normal
+  browser profile) driven over its local debugging port: the model's
+  `browse_url` reuses one working tab and `open_browser_window` adds tabs to
+  the same window. In the GUI it runs headless and shows up as a panel
+  inside the CASE window (live screenshots + forwarded clicks, scrolling and
+  typing, with a tab strip and address bar). Without Edge/Chrome it falls
+  back to a standalone pywebview window per call. `web_search` uses Brave
+  (if you set a key), then DuckDuckGo, then this browser as a last resort.
 - `case_skills.py` — lightweight, per-install skills (markdown + YAML
   frontmatter). Three matching modes: keyword (explicit trigger phrases),
   semantic (local embedding similarity, no triggers needed), and manual
